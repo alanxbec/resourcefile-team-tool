@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ResourceFile — Team</title>
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ResourceFile" />
+  <meta name="theme-color" content="#1a1a2e" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --ink:    #0f1117;
+      --ink2:   #1c1f2b;
+      --sage:   #2a7c6f;
+      --sage-l: #3db89f;
+      --sage-xl:#e6f7f4;
+      --amber:  #d97706;
+      --red:    #dc2626;
+      --bg:     #f5f6f8;
+      --surface:#ffffff;
+      --border: #e2e6ed;
+      --muted:  #6b7280;
+      --text:   #111827;
+      --serif:  'Fraunces', Georgia, serif;
+      --sans:   'Sora', system-ui, sans-serif;
+      --radius: 14px;
+      --shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.06);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,.12);
+    }
+    html, body { height:100%; background:var(--bg); font-family:var(--sans); color:var(--text); overscroll-behavior:none; -webkit-font-smoothing:antialiased; }
+    #app { display:flex; flex-direction:column; min-height:100vh; }
+
+    /* ── TOAST ── */
+    #toast {
+      display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+      color:#fff; padding:12px 20px; border-radius:12px; font-size:13.5px;
+      z-index:9999; box-shadow:var(--shadow-lg); white-space:nowrap;
+      max-width:92vw; font-weight:600; letter-spacing:.01em;
+    }
+
+    /* ── NOTIFICATION BANNER ── */
+    #notif-banner { display:none; background:var(--ink2); color:#fff; overflow:hidden; max-height:0; transition:max-height .4s ease; }
+    #notif-banner.show { display:block; max-height:300px; }
+    .notif-inner { padding:12px 16px; max-width:960px; margin:0 auto; }
+    .notif-title { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--sage-l); margin-bottom:8px; font-weight:700; }
+    .notif-items { display:flex; flex-direction:column; gap:5px; }
+    .notif-item { font-size:13px; display:flex; align-items:center; gap:8px; }
+    .notif-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .notif-close { float:right; background:none; border:none; color:#666; font-size:20px; cursor:pointer; line-height:1; padding:0; }
+
+    /* ── HEADER ── */
+    header { background:var(--ink); position:sticky; top:0; z-index:100; box-shadow:0 1px 0 rgba(255,255,255,.07); }
+    .header-inner { max-width:960px; margin:0 auto; padding:12px 18px; display:flex; align-items:center; justify-content:space-between; }
+    .logo { display:flex; align-items:center; gap:11px; }
+    .logo-badge { width:34px; height:34px; background:linear-gradient(135deg,var(--sage),var(--sage-l)); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+    .logo-title { color:#fff; font-size:16px; font-family:var(--serif); font-weight:600; letter-spacing:.01em; line-height:1.1; }
+    .logo-sub { color:#4b5563; font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; margin-top:1px; }
+    nav { display:flex; gap:6px; }
+    .nav-btn { background:transparent; border:1px solid #2d3240; color:#6b7280; padding:7px 14px; border-radius:8px; cursor:pointer; font-size:12px; font-family:var(--sans); font-weight:600; transition:all .18s; letter-spacing:.01em; }
+    .nav-btn.active { background:var(--sage); border-color:var(--sage); color:#fff; }
+    .nav-btn:not(.active):hover { border-color:#3d4255; color:#d1d5db; }
+
+    /* ── MAIN ── */
+    main { max-width:960px; margin:0 auto; padding:24px 18px; width:100%; flex:1; }
+    .view { display:none; }
+    .view.active { display:block; animation:fadeIn .2s ease; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+
+    /* ── SETUP ── */
+    #view-setup { max-width:520px; margin:12px auto; }
+    .setup-card { background:var(--surface); border-radius:20px; padding:30px 26px; border:1px solid var(--border); box-shadow:var(--shadow); }
+    .setup-logo { font-family:var(--serif); font-size:26px; color:var(--ink); margin-bottom:4px; font-weight:600; }
+    .setup-sub { font-size:13.5px; color:var(--muted); line-height:1.65; margin-bottom:22px; }
+    .field-label { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); margin-bottom:5px; font-weight:700; }
+    .field-input { width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:9px; font-family:var(--sans); font-size:14px; background:#fafbfd; margin-bottom:13px; color:var(--text); transition:border-color .18s, box-shadow .18s; }
+    .field-input:focus { outline:none; border-color:var(--sage); box-shadow:0 0 0 3px rgba(42,124,111,.12); }
+    .btn-primary { background:var(--sage); color:#fff; border:none; padding:13px 24px; border-radius:10px; font-size:14.5px; font-family:var(--sans); font-weight:700; cursor:pointer; width:100%; transition:background .18s, transform .1s; letter-spacing:.01em; }
+    .btn-primary:hover { background:var(--sage-l); }
+    .btn-primary:active { transform:scale(.98); }
+    .setup-note { font-size:12px; color:var(--muted); line-height:1.65; margin-top:14px; }
+    .setup-note a { color:var(--sage); }
+    .setup-divider { border:none; border-top:1px solid var(--border); margin:20px 0; }
+    .setup-step { display:flex; gap:12px; margin-bottom:14px; align-items:flex-start; }
+    .step-num { background:var(--ink); color:var(--sage-l); width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; margin-top:1px; }
+    .step-text { font-size:13px; color:#4b5563; line-height:1.55; }
+    .step-text a { color:var(--sage); }
+    .step-text code { background:#f0f4f8; padding:2px 6px; border-radius:4px; font-size:11.5px; }
+
+    /* ── SCANNER ── */
+    #view-scanner { max-width:580px; margin:0 auto; }
+    .scan-title { font-family:var(--serif); font-size:30px; margin-bottom:6px; color:var(--ink); font-weight:600; font-style:italic; }
+    .scan-sub { color:var(--muted); font-size:13.5px; line-height:1.65; margin-bottom:22px; }
+    .dropzone {
+      border:2px dashed #c5d8d5; border-radius:18px; background:var(--surface);
+      padding:48px 20px; text-align:center; cursor:pointer; transition:all .2s; margin-bottom:28px;
+      box-shadow:var(--shadow); position:relative; overflow:hidden;
+    }
+    .dropzone::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%, rgba(42,124,111,.06) 0%, transparent 70%); pointer-events:none; }
+    .dropzone.over { background:var(--sage-xl); border-color:var(--sage); border-style:solid; transform:scale(1.01); }
+    .dz-icon { font-size:52px; margin-bottom:12px; display:block; }
+    .dz-title { font-size:17px; font-weight:700; margin-bottom:5px; color:var(--ink); }
+    .dz-hint { color:var(--muted); font-size:13px; margin-bottom:20px; }
+    .spinner { width:38px; height:38px; border:3px solid #d1ede9; border-top-color:var(--sage); border-radius:50%; animation:spin .75s linear infinite; margin:0 auto 14px; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .scanning-text { font-size:16px; font-weight:700; margin-bottom:5px; color:var(--ink); }
+    .scanning-sub { color:var(--muted); font-size:13px; }
+    .recent-label { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); margin-bottom:10px; font-weight:700; }
+    .recent-list { display:flex; flex-direction:column; gap:8px; }
+    .recent-card { display:flex; align-items:center; gap:13px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:13px 16px; cursor:pointer; transition:box-shadow .18s, transform .12s; box-shadow:var(--shadow); }
+    .recent-card:hover { box-shadow:var(--shadow-lg); }
+    .recent-card:active { transform:scale(.98); }
+    .recent-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+    .recent-info { flex:1; }
+    .recent-name { font-size:14px; font-weight:700; }
+    .recent-cat { font-size:12px; color:var(--muted); margin-top:2px; }
+
+    /* ── EVENT DATE BADGE ── */
+    .expiry-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; letter-spacing:.01em; }
+    .expiry-ok      { background:#dbeafe; color:#1e40af; }
+    .expiry-warn    { background:#fef3c7; color:#92400e; }
+    .expiry-expired { background:#fee2e2; color:#991b1b; }
+    .expiry-none    { background:#f3f4f6; color:var(--muted); }
+
+    /* ── LIBRARY ── */
+    .lib-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+    .lib-title { font-family:var(--serif); font-size:28px; color:var(--ink); font-weight:600; font-style:italic; }
+    .btn-dark { background:var(--ink); color:var(--sage-l); border:none; padding:9px 16px; border-radius:9px; font-family:var(--sans); font-size:12.5px; cursor:pointer; font-weight:700; letter-spacing:.02em; transition:background .18s; }
+    .btn-dark:hover { background:var(--ink2); }
+    .filter-row { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:20px; }
+    .chip { background:var(--surface); border:1.5px solid var(--border); color:#4b5563; padding:6px 13px; border-radius:20px; font-size:12px; cursor:pointer; font-family:var(--sans); white-space:nowrap; transition:all .18s; font-weight:600; }
+    .chip:hover { border-color:#adb5bd; }
+    .chip.active { background:var(--ink); color:#fff; border-color:var(--ink); }
+    .empty-state { text-align:center; padding:70px 0; }
+    .empty-icon { font-size:54px; margin-bottom:12px; }
+    .empty-title { font-size:20px; font-weight:700; margin-bottom:6px; font-family:var(--serif); font-style:italic; }
+    .empty-text { color:var(--muted); margin-bottom:20px; font-size:14px; }
+    /* ── SEARCH BAR ── */
+    .search-wrap { position:relative; margin-bottom:16px; }
+    .search-input { width:100%; padding:11px 14px 11px 40px; border:1.5px solid var(--border); border-radius:10px; font-family:var(--sans); font-size:14px; background:var(--surface); color:var(--text); transition:border-color .18s, box-shadow .18s; }
+    .search-input:focus { outline:none; border-color:var(--sage); box-shadow:0 0 0 3px rgba(42,124,111,.12); }
+    .search-icon { position:absolute; left:13px; top:50%; transform:translateY(-50%); font-size:15px; pointer-events:none; }
+    .search-clear { position:absolute; right:11px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer; display:none; line-height:1; padding:2px 4px; }
+
+    /* ── CATEGORY ACCORDION ── */
+    .cat-group { margin-bottom:10px; border-radius:var(--radius); overflow:hidden; border:1px solid var(--border); box-shadow:var(--shadow); }
+    .cat-group-header { display:flex; align-items:center; justify-content:space-between; padding:13px 18px; cursor:pointer; background:var(--surface); transition:background .15s; user-select:none; }
+    .cat-group-header:hover { background:#f9fafb; }
+    .cat-group-header-left { display:flex; align-items:center; gap:10px; }
+    .cat-group-icon { font-size:20px; }
+    .cat-group-label { font-size:14px; font-weight:700; color:var(--text); }
+    .cat-group-count { font-size:12px; color:var(--muted); margin-left:2px; }
+    .cat-group-chevron { font-size:12px; color:var(--muted); transition:transform .22s; }
+    .cat-group.open .cat-group-chevron { transform:rotate(180deg); }
+    .cat-group-body { display:none; border-top:1px solid var(--border); }
+    .cat-group.open .cat-group-body { display:block; }
+    .cat-group-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; padding:14px; background:var(--bg); }
+    .resource-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; }
+    .resource-card { background:var(--surface); border-radius:var(--radius); overflow:hidden; border:1px solid var(--border); cursor:pointer; display:flex; flex-direction:column; transition:box-shadow .2s, transform .12s; box-shadow:var(--shadow); }
+    .resource-card:hover { box-shadow:var(--shadow-lg); transform:translateY(-2px); }
+    .resource-card:active { transform:scale(.98); }
+    .card-top { padding:14px 16px; display:flex; align-items:center; gap:9px; color:#fff; position:relative; overflow:hidden; }
+    .card-top::after { content:''; position:absolute; top:-20px; right:-20px; width:80px; height:80px; border-radius:50%; background:rgba(255,255,255,.1); }
+    .card-icon { font-size:20px; position:relative; z-index:1; }
+    .card-cat-label { font-size:10px; text-transform:uppercase; letter-spacing:.1em; opacity:.95; font-weight:700; position:relative; z-index:1; }
+    .card-body { padding:14px 16px; flex:1; }
+    .card-name { font-size:15px; font-weight:700; margin-bottom:5px; line-height:1.3; }
+    .card-summary { font-size:12px; color:#6b7280; line-height:1.55; margin-bottom:9px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+    .card-contact { font-size:11.5px; color:var(--muted); margin-top:3px; }
+    .card-footer { padding:10px 16px; border-top:1px solid #f3f4f6; display:flex; align-items:center; justify-content:space-between; }
+    .card-footer-link { font-size:11px; color:var(--sage); font-weight:700; letter-spacing:.02em; }
+
+    /* ── DETAIL ── */
+    #view-detail { max-width:660px; margin:0 auto; }
+    .detail-nav { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+    .btn-back { background:none; border:none; color:var(--muted); cursor:pointer; font-size:13.5px; font-family:var(--sans); padding:0; font-weight:600; display:flex; align-items:center; gap:5px; transition:color .18s; }
+    .btn-back:hover { color:var(--text); }
+    .btn-delete { background:none; border:1.5px solid #fca5a5; color:var(--red); cursor:pointer; font-size:12.5px; font-family:var(--sans); padding:7px 13px; border-radius:8px; font-weight:600; transition:all .18s; }
+    .btn-delete:hover { background:#fee2e2; }
+    .detail-header { padding:24px; border-radius:16px; display:flex; align-items:center; gap:16px; color:#fff; margin-bottom:16px; position:relative; overflow:hidden; }
+    .detail-header::after { content:''; position:absolute; bottom:-30px; right:-30px; width:130px; height:130px; border-radius:50%; background:rgba(255,255,255,.1); pointer-events:none; }
+    .detail-cat-icon { font-size:38px; position:relative; z-index:1; }
+    .detail-cat-label { font-size:10px; text-transform:uppercase; letter-spacing:.14em; opacity:.8; margin-bottom:5px; font-weight:700; }
+    .detail-name { font-family:var(--serif); font-size:24px; line-height:1.2; font-weight:600; position:relative; z-index:1; }
+    .detail-body { display:flex; flex-direction:column; gap:12px; }
+    .detail-section { background:var(--surface); border-radius:12px; padding:16px 18px; border:1px solid var(--border); box-shadow:var(--shadow); }
+    .section-title { font-size:10px; text-transform:uppercase; letter-spacing:.14em; color:#9ca3af; margin-bottom:9px; font-weight:700; }
+    .detail-text { font-size:14px; line-height:1.75; color:#374151; }
+    .tag-list { display:flex; flex-wrap:wrap; gap:6px; }
+    .tag { border:1.5px solid; border-radius:20px; padding:4px 11px; font-size:12px; background:transparent; font-family:var(--sans); font-weight:600; }
+    .contact-grid { display:flex; flex-direction:column; gap:10px; }
+    .contact-item { display:flex; align-items:flex-start; gap:11px; font-size:14px; color:#374151; text-decoration:none; }
+    .contact-item:hover { color:var(--sage); }
+    .notes-box { background:#f8fafc; border-left:3px solid var(--sage); padding:11px 15px; font-size:13.5px; color:#4b5563; line-height:1.65; border-radius:0 8px 8px 0; }
+    .added-at { font-size:11px; color:#c4c9d4; text-align:right; }
+    .expiry-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .expiry-info { font-size:13.5px; color:#4b5563; }
+
+    /* ── FLYER HERO ── */
+    .flyer-hero { position:relative; width:100%; border-radius:16px; overflow:hidden; cursor:pointer; margin-bottom:14px; background:#e5e7eb; box-shadow:var(--shadow); }
+    .flyer-hero img { width:100%; display:block; max-height:480px; object-fit:contain; background:#f3f4f6; }
+    .flyer-hero-tap { position:absolute; bottom:12px; right:12px; background:rgba(0,0,0,.6); color:#fff; font-size:12px; font-weight:700; padding:6px 14px; border-radius:20px; letter-spacing:.02em; pointer-events:none; backdrop-filter:blur(4px); }
+    .flyer-hero:active { opacity:.9; }
+
+    /* ── EDIT FORM ── */
+    .btn-edit { background:none; border:1.5px solid var(--sage); color:var(--sage); cursor:pointer; font-size:12.5px; font-family:var(--sans); padding:7px 13px; border-radius:8px; font-weight:600; transition:all .18s; }
+    .btn-edit:hover { background:var(--sage-xl); }
+    .edit-field { margin-bottom:14px; }
+    .edit-label { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); margin-bottom:5px; font-weight:700; display:block; }
+    .edit-input, .edit-textarea, .edit-select { width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:9px; font-family:var(--sans); font-size:14px; background:#fafbfd; color:var(--text); transition:border-color .18s, box-shadow .18s; }
+    .edit-textarea { min-height:80px; resize:vertical; line-height:1.6; }
+    .edit-input:focus, .edit-textarea:focus, .edit-select:focus { outline:none; border-color:var(--sage); box-shadow:0 0 0 3px rgba(42,124,111,.12); }
+    .edit-row { display:flex; gap:12px; }
+    .edit-row .edit-field { flex:1; }
+    .edit-checkbox-row { display:flex; align-items:center; gap:9px; margin-bottom:16px; padding:12px 14px; background:#f8fafc; border-radius:9px; border:1px solid var(--border); }
+    .edit-checkbox-row input { width:18px; height:18px; accent-color:var(--sage); cursor:pointer; }
+    .edit-checkbox-row label { font-size:13.5px; color:var(--text); font-weight:600; cursor:pointer; }
+    .edit-actions { display:flex; gap:10px; margin-top:8px; }
+    .btn-save { flex:1; background:var(--sage); color:#fff; border:none; padding:13px; border-radius:10px; font-size:14.5px; font-family:var(--sans); font-weight:700; cursor:pointer; transition:background .18s; }
+    .btn-save:hover { background:var(--sage-l); }
+    .btn-save:disabled { opacity:.6; cursor:default; }
+    .btn-cancel { flex:0 0 auto; padding:13px 22px; border:1.5px solid var(--border); background:var(--surface); color:#4b5563; border-radius:10px; font-size:14px; font-family:var(--sans); font-weight:600; cursor:pointer; transition:background .18s; }
+    .btn-cancel:hover { background:#f9fafb; }
+
+    /* ── ACCESS MODE (staff vs youth) ── */
+    body.youth-mode .staff-only { display:none !important; }
+    body:not(.youth-mode) .youth-only { display:none !important; }
+
+    /* ── DUPLICATE MODAL ── */
+    #dup-modal { display:none; position:fixed; inset:0; background:rgba(15,17,23,.75); backdrop-filter:blur(4px); z-index:8000; align-items:center; justify-content:center; padding:20px; }
+    #dup-modal.show { display:flex; }
+    .dup-card { background:var(--surface); border-radius:18px; max-width:440px; width:100%; max-height:88vh; overflow-y:auto; box-shadow:var(--shadow-lg); padding:22px; }
+    .dup-warn { background:#fef3c7; color:#92400e; border-radius:10px; padding:11px 14px; font-size:13.5px; font-weight:700; display:flex; align-items:center; gap:9px; margin-bottom:14px; }
+    .dup-lead { font-size:13px; color:#4b5563; line-height:1.6; margin-bottom:13px; }
+    .dup-lead strong { color:var(--ink); }
+    .dup-match { border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:11px; cursor:pointer; transition:box-shadow .15s, transform .12s; }
+    .dup-match:hover { box-shadow:var(--shadow); }
+    .dup-match:active { transform:scale(.99); }
+    .dup-match-top { padding:9px 13px; display:flex; align-items:center; gap:7px; color:#fff; }
+    .dup-match-cat { font-size:10px; text-transform:uppercase; letter-spacing:.1em; font-weight:700; }
+    .dup-match-body { padding:11px 13px; }
+    .dup-match-name { font-size:14px; font-weight:700; margin-bottom:3px; }
+    .dup-match-sum { font-size:12px; color:#6b7280; line-height:1.5; margin-bottom:5px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .dup-match-meta { font-size:11.5px; color:var(--muted); }
+    .dup-actions { display:flex; gap:9px; margin-top:16px; }
+    .dup-btn-add { flex:1; background:var(--sage); color:#fff; border:none; padding:12px; border-radius:10px; font-size:13.5px; font-weight:700; cursor:pointer; transition:background .18s; }
+    .dup-btn-add:hover { background:var(--sage-l); }
+    .dup-btn-discard { width:100%; margin-top:8px; background:none; border:none; color:#9ca3af; font-size:12.5px; cursor:pointer; padding:7px; }
+    .dup-btn-discard:hover { color:var(--muted); }
+
+    /* ── FULL SCREEN VIEWER ── */
+    #img-viewer { display:none; position:fixed; inset:0; background:rgba(0,0,0,.95); z-index:9000; align-items:center; justify-content:center; flex-direction:column; }
+    #img-viewer.show { display:flex; }
+    #img-viewer img { max-width:96vw; max-height:90vh; object-fit:contain; border-radius:6px; }
+    #img-viewer-close { position:absolute; top:16px; right:18px; background:rgba(255,255,255,.15); border:none; color:#fff; font-size:22px; cursor:pointer; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; transition:background .18s; }
+    #img-viewer-close:hover { background:rgba(255,255,255,.25); }
+
+    /* ── LOADING OVERLAY ── */
+    #loading { display:none; position:fixed; inset:0; background:rgba(15,17,23,.75); backdrop-filter:blur(4px); z-index:500; align-items:center; justify-content:center; flex-direction:column; gap:14px; }
+    #loading.show { display:flex; }
+    .loading-spinner { width:46px; height:46px; border:3px solid rgba(255,255,255,.15); border-top-color:var(--sage-l); border-radius:50%; animation:spin .75s linear infinite; }
+    .loading-text { color:#e5e7eb; font-size:14px; font-weight:600; }
+  </style>
+</head>
+<body>
+<div id="loading">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Connecting to team library...</div>
+</div>
+
+<div id="app">
+  <!-- NOTIFICATION BANNER -->
+  <div id="notif-banner">
+    <div class="notif-inner">
+      <button class="notif-close" onclick="closeBanner()">×</button>
+      <div class="notif-title">📋 Team Library Updates</div>
+      <div class="notif-items" id="notif-items"></div>
+    </div>
+  </div>
+
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-badge">📎</div>
+        <div>
+          <div class="logo-title">ResourceFile</div>
+          <div class="logo-sub">Team Toolkit</div>
+        </div>
+      </div>
+      <nav>
+        <button class="nav-btn active staff-only" id="btn-nav-scan" onclick="showView('scanner')">+ Scan</button>
+        <button class="nav-btn" id="btn-nav-lib" onclick="showView('library')">Library (<span id="lib-count">0</span>)</button>
+        <button class="nav-btn staff-only" id="btn-logout" onclick="doLogout()" title="Sign out">Sign out</button>
+        <button class="nav-btn youth-only" id="btn-staff-login" onclick="goToLogin()" style="display:none">Staff sign in</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- LOGIN VIEW -->
+    <div id="view-setup" class="view active">
+      <div class="setup-card">
+        <div class="setup-logo">📎 ResourceFile</div>
+        <p class="setup-sub">Sign in to your team's shared resource library.</p>
+
+        <div class="field-label">Email</div>
+        <input class="field-input" type="email" id="login-email" placeholder="you@agency.org" autocomplete="username" />
+
+        <div class="field-label">Password</div>
+        <input class="field-input" type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter')doLogin()" />
+
+        <button class="btn-primary" onclick="doLogin()">Sign in →</button>
+        <p class="setup-note">No account? Ask your team admin to add you in Supabase.</p>
+
+        <hr class="setup-divider">
+        <button class="btn-dark" style="width:100%;padding:12px" onclick="enterYouthMode()">👀 Just browsing? View the resource library →</button>
+        <p class="setup-note">View-only — no account needed. You can't add or change anything.</p>
+      </div>
+    </div>
+
+    <!-- SCANNER VIEW -->
+    <div id="view-scanner" class="view">
+      <div class="scan-title">Scan a Resource Flyer</div>
+      <p class="scan-sub">Take a photo or upload a flyer image. AI extracts the info and saves it to your team's shared library instantly.</p>
+
+      <div class="dropzone" id="dropzone"
+           ondragover="event.preventDefault();this.classList.add('over')"
+           ondragleave="this.classList.remove('over')"
+           ondrop="handleDrop(event)">
+        <input type="file" id="file-input-camera"  accept="image/*" capture="environment" style="display:none" onchange="handleFileChange(event)" />
+        <input type="file" id="file-input-library" accept="image/*" style="display:none" onchange="handleFileChange(event)" />
+        <div id="dz-idle">
+          <div class="dz-icon">📷</div>
+          <div class="dz-title">Add a resource flyer</div>
+          <div class="dz-hint">JPG, PNG, HEIC — or drag & drop</div>
+          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:4px">
+            <button class="btn-primary" style="width:auto;padding:11px 22px" onclick="event.stopPropagation();document.getElementById('file-input-camera').click()">📷 Take Photo</button>
+            <button class="btn-dark"    style="width:auto;padding:11px 22px" onclick="event.stopPropagation();document.getElementById('file-input-library').click()">🖼 Photo Library</button>
+          </div>
+        </div>
+        <div id="dz-scanning" style="display:none">
+          <div class="spinner"></div>
+          <div class="scanning-text">Reading flyer...</div>
+          <div class="scanning-sub">Extracting info & saving to team library</div>
+        </div>
+      </div>
+
+      <div id="recent-section" style="display:none">
+        <div class="recent-label">Recently Added by Team</div>
+        <div class="recent-list" id="recent-list"></div>
+      </div>
+    </div>
+
+    <!-- LIBRARY VIEW -->
+    <div id="view-library" class="view">
+      <div class="lib-header">
+        <div class="lib-title">Resource Library</div>
+        <button class="btn-dark staff-only" onclick="showView('scanner')">+ Add New</button>
+      </div>
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" type="text" id="search-input" placeholder="Search resources…" oninput="onSearch()" />
+        <button class="search-clear" id="search-clear" onclick="clearSearch()">×</button>
+      </div>
+      <div class="filter-row" id="filter-row"></div>
+      <div id="library-empty" class="empty-state" style="display:none">
+        <div class="empty-icon">📂</div>
+        <div class="empty-title">No resources yet</div>
+        <div class="empty-text">No resources have been added yet</div>
+        <button class="btn-primary staff-only" style="width:auto;padding:11px 24px" onclick="showView('scanner')">Scan First Flyer</button>
+      </div>
+      <div id="search-empty" class="empty-state" style="display:none">
+        <div class="empty-icon">🔎</div>
+        <div class="empty-title">No matches found</div>
+        <div class="empty-text">Try a different search term</div>
+      </div>
+      <div id="accordion-container"></div>
+      <div class="resource-grid" id="resource-grid" style="display:none"></div>
+    </div>
+
+    <!-- DETAIL VIEW -->
+    <div id="view-detail" class="view">
+      <div class="detail-nav">
+        <button class="btn-back" onclick="showView('library')">← Back to Library</button>
+        <div style="display:flex;gap:8px" class="staff-only">
+          <button class="btn-edit" id="btn-edit">✏️ Edit</button>
+          <button class="btn-delete" id="btn-delete">🗑 Remove</button>
+        </div>
+      </div>
+      <div id="detail-content"></div>
+    </div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<!-- FULL SCREEN IMAGE VIEWER -->
+<div id="img-viewer" onclick="closeImgViewer()">
+  <button id="img-viewer-close" onclick="closeImgViewer()">×</button>
+  <img id="img-viewer-img" src="" alt="Flyer" onclick="event.stopPropagation()" />
+</div>
+
+<!-- DUPLICATE WARNING MODAL -->
+<div id="dup-modal">
+  <div class="dup-card" id="dup-modal-body"></div>
+</div>
+
+<script>
+const CATEGORIES = [
+  { id:"housing",        label:"Housing & Shelter",     icon:"🏠", color:"#2D6A4F" },
+  { id:"food",           label:"Food & Nutrition",       icon:"🥗", color:"#B5451B" },
+  { id:"mental_health",  label:"Mental Health",          icon:"🧠", color:"#5C4B8A" },
+  { id:"substance_use",  label:"Substance Use",          icon:"💊", color:"#C0392B" },
+  { id:"employment",     label:"Employment",             icon:"💼", color:"#1A5276" },
+  { id:"legal",          label:"Legal Aid",              icon:"⚖️", color:"#784212" },
+  { id:"medical",        label:"Medical / Health",       icon:"🏥", color:"#117A65" },
+  { id:"childcare",      label:"Childcare / Family",     icon:"👨‍👩‍👧", color:"#6C3483" },
+  { id:"transportation", label:"Transportation",         icon:"🚌", color:"#1F618D" },
+  { id:"financial",      label:"Financial Assistance",   icon:"💰", color:"#1E8449" },
+  { id:"education",      label:"Education / Training",   icon:"📚", color:"#7D6608" },
+  { id:"other",          label:"Other Resources",        icon:"📋", color:"#616A6B" },
+];
+const CAT = Object.fromEntries(CATEGORIES.map(c=>[c.id,c]));
+const GRACE_DAYS = 3;
+const WARN_DAYS  = 7;
+
+// ── CONFIG (same for the whole team) ──
+const SUPABASE_URL = 'https://slqldccbfrfehprmmmol.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_zL9huvvXqqnvLQw1KXA6Pg_dnjECCvb'; // ← replace with your project's anon public key before deploying
+
+let sb = null;
+let resources = [];
+let activeFilter = "all";
+let lastSeenAt = null;
+let appMode = 'staff';        // 'staff' = logged in (full power) | 'youth' = read-only
+let currentUserName = 'Team'; // shown as "added by"
+let pollTimer = null;
+
+// ── INIT ──
+window.addEventListener('DOMContentLoaded', async () => {
+  // One-time cleanup of obsolete credentials from the pre-login version
+  ['rf_sb_url','rf_sb_key','rf_anthropic_key','rf_user_name'].forEach(k => localStorage.removeItem(k));
+
+  if (SUPABASE_ANON_KEY.startsWith('PASTE_')) {
+    hideLoading();
+    showToast('Setup needed: add your Supabase anon key to the HTML file.', 'error');
+    showViewRaw('setup');
+    return;
+  }
+
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // Youth view-only mode via the ?view link — no login required
+  const params = new URLSearchParams(location.search);
+  if (params.has('view')) { await enterYouthMode(); return; }
+
+  // Otherwise staff: resume an existing session, or show the login screen
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    await startStaffSession();
+  } else {
+    hideLoading();
+    showViewRaw('setup');
+  }
+});
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  if (!email || !password) { showToast('Enter your email and password.', 'error'); return; }
+  showLoading('Signing in...');
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) { hideLoading(); showToast(error.message || 'Sign-in failed.', 'error'); return; }
+    await startStaffSession();
+  } catch(e) {
+    hideLoading();
+    showToast('Sign-in error: ' + e.message, 'error');
+  }
+}
+
+async function startStaffSession() {
+  appMode = 'staff';
+  document.body.classList.remove('youth-mode');
+  try {
+    const { data: { user } } = await sb.auth.getUser();
+    currentUserName = (user && user.user_metadata && user.user_metadata.display_name)
+      || (user && user.email ? user.email.split('@')[0] : 'Team');
+  } catch(e) { currentUserName = 'Team'; }
+  showLoading('Loading team library...');
+  await loadResources();
+  hideLoading();
+  showView('scanner');
+  checkNotifications();
+  startPolling();
+}
+
+async function enterYouthMode() {
+  appMode = 'youth';
+  document.body.classList.add('youth-mode');
+  const sl = document.getElementById('btn-staff-login'); if (sl) sl.style.display = '';
+  showLoading('Loading resource library...');
+  await loadResources();
+  hideLoading();
+  showView('library');
+  startPolling();
+}
+
+async function doLogout() {
+  if (!confirm('Sign out of ResourceFile?')) return;
+  stopPolling();
+  try { await sb.auth.signOut(); } catch(e) {}
+  location.href = location.pathname; // clean reload to the login screen
+}
+
+function goToLogin() { location.href = location.pathname; }
+
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(async () => {
+    await loadResources();
+    if (appMode === 'staff') checkNotifications();
+  }, 30000);
+}
+function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+// ── LOADING ──
+function showLoading(msg='Loading...') {
+  document.querySelector('.loading-text').textContent = msg;
+  document.getElementById('loading').classList.add('show');
+}
+function hideLoading() { document.getElementById('loading').classList.remove('show'); }
+
+// ── SUPABASE ──
+async function loadResources() {
+  if (!sb) return;
+  // Auto-delete only runs for signed-in staff (RLS blocks anon deletes anyway).
+  // Recurring events (is_recurring=true) and date-display-only rows are never auto-deleted.
+  if (appMode === 'staff') {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - GRACE_DAYS);
+    const cutoffStr = cutoff.toISOString().split('T')[0];
+    await sb.from('resources')
+      .delete()
+      .not('expiry_date', 'is', null)
+      .neq('is_recurring', true)
+      .lt('expiry_date', cutoffStr)
+      .gte('expiry_date', '2020-01-01'); // floor to avoid bad dates
+  }
+
+  const { data, error } = await sb.from('resources').select('*').order('added_at',{ascending:false});
+  if (error) { console.error('Load error:', JSON.stringify(error)); showToast('Library load error: ' + error.message, 'error'); }
+  if (!error && data) {
+    resources = data;
+    updateLibCount();
+  }
+}
+
+async function saveResource(r) {
+  console.log('Saving resource:', JSON.stringify(r));
+  if (!sb) { console.error('No Supabase client!'); return null; }
+  try {
+    const result = await sb.from('resources').insert([r]).select().single();
+    if (result.error) {
+      // If image_url column doesn't exist yet, retry without it
+      if (result.error.message && result.error.message.includes('image_url')) {
+        console.warn('image_url column missing — saving without image. Run: ALTER TABLE resources ADD COLUMN image_url text;');
+        const { image_url, ...withoutImg } = r;
+        const retry = await sb.from('resources').insert([withoutImg]).select().single();
+        if (retry.error) throw new Error(retry.error.message || JSON.stringify(retry.error));
+        return retry.data;
+      }
+      throw new Error(result.error.message || JSON.stringify(result.error));
+    }
+    return result.data;
+  } catch(e) {
+    console.error('saveResource exception:', e.message, e);
+    throw e;
+  }
+}
+
+async function deleteResource(id) {
+  if (!sb) return;
+  await sb.from('resources').delete().eq('id', id);
+  resources = resources.filter(r=>r.id!==id);
+  updateLibCount();
+  showToast('Resource removed from team library.');
+  showView('library');
+}
+
+async function updateResource(id, fields) {
+  if (!sb) throw new Error('Not connected to the team library');
+  const result = await sb.from('resources').update(fields).eq('id', id).select().single();
+  if (result.error) throw new Error(result.error.message || JSON.stringify(result.error));
+  return result.data;
+}
+
+// ── IMAGE UPLOAD ──
+// Accepts a pre-converted JPEG blob so the upload never fails due to HEIC/unknown format
+async function uploadFlyerImage(jpegBlob) {
+  if (!sb) return null;
+  try {
+    const fileName = `flyer_${Date.now()}_${Math.random().toString(36).slice(2,8)}.jpg`;
+    const { error } = await sb.storage.from('flyers').upload(fileName, jpegBlob, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: 'image/jpeg'
+    });
+    if (error) {
+      console.error('Image upload error:', JSON.stringify(error));
+      return null; // non-fatal — resource still saves without image
+    }
+    const { data: urlData } = sb.storage.from('flyers').getPublicUrl(fileName);
+    return urlData?.publicUrl || null;
+  } catch(e) {
+    console.error('uploadFlyerImage exception:', e.message);
+    return null;
+  }
+}
+
+// ── NOTIFICATIONS ──
+function checkNotifications() {
+  const lastSeen = localStorage.getItem('rf_last_seen');
+  const lastSeenDate = lastSeen ? new Date(lastSeen) : null;
+  const items = [];
+
+  // New resources since last visit
+  if (lastSeenDate) {
+    const newOnes = resources.filter(r => new Date(r.added_at) > lastSeenDate);
+    newOnes.forEach(r => {
+      const cat = CAT[r.category]||CAT.other;
+      items.push({ color: cat.color, text: `New ${cat.label} resource added: <strong>${esc(r.name)}</strong>` });
+    });
+  }
+
+  // Expiring soon
+  const today = new Date();
+  resources.forEach(r => {
+    if (!r.expiry_date) return;
+    const exp = new Date(r.expiry_date);
+    const daysLeft = Math.ceil((exp - today) / 86400000);
+    if (daysLeft >= 0 && daysLeft <= WARN_DAYS) {
+      const cat = CAT[r.category]||CAT.other;
+      items.push({ color: '#e8a838', text: `⚠️ <strong>${esc(r.name)}</strong> expires in ${daysLeft} day${daysLeft===1?'':'s'}` });
+    }
+  });
+
+  if (items.length > 0) {
+    const container = document.getElementById('notif-items');
+    container.innerHTML = items.map(i =>
+      `<div class="notif-item"><div class="notif-dot" style="background:${i.color}"></div><span>${i.text}</span></div>`
+    ).join('');
+    document.getElementById('notif-banner').classList.add('show');
+  }
+
+  localStorage.setItem('rf_last_seen', new Date().toISOString());
+}
+
+function closeBanner() {
+  document.getElementById('notif-banner').classList.remove('show');
+}
+
+// ── NAVIGATION ──
+function showViewRaw(name) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.getElementById('btn-nav-scan').classList.toggle('active', name==='scanner');
+  document.getElementById('btn-nav-lib').classList.toggle('active', name==='library'||name==='detail');
+}
+async function showView(name) {
+  // Youth (read-only) can never reach the scanner
+  if (name==='scanner' && appMode!=='staff') name='library';
+  showViewRaw(name);
+  if (name==='scanner') { await loadResources(); renderRecent(); }
+  if (name==='library') { await loadResources(); renderLibrary(); }
+  window.scrollTo(0,0);
+}
+function updateLibCount() { document.getElementById('lib-count').textContent = resources.length; }
+
+// ── TOAST ──
+let toastTimer;
+function showToast(msg,type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = type==='error' ? '#C0392B' : '#0f9b8e';
+  t.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.style.display='none', 3500);
+}
+
+// ── FILE HANDLING ──
+function handleFileChange(e) { const f=e.target.files?.[0]; if(f) processImage(f); e.target.value=''; }
+function handleDrop(e) { e.preventDefault(); document.getElementById('dropzone').classList.remove('over'); const f=e.dataTransfer.files?.[0]; if(f) processImage(f); }
+
+// ── SCAN ──
+// Convert any image (including iPhone HEIC) to a JPEG blob + base64.
+// We use the SAME jpeg blob for both the Supabase Storage upload AND the API call,
+// so both always succeed regardless of original file format.
+async function toJpegBlobAndBase64(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      // Cap at 2048px on longest side to keep payload reasonable
+      const max = 2048;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > max || h > max) {
+        if (w > h) { h = Math.round(h * max / w); w = max; }
+        else       { w = Math.round(w * max / h); h = max; }
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => {
+        if (!blob) { reject(new Error('Canvas conversion failed')); return; }
+        const reader = new FileReader();
+        reader.onload = () => resolve({ blob, base64: reader.result.split(',')[1] });
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', 0.92);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not load image — try a different photo')); };
+    img.src = url;
+  });
+}
+
+async function processImage(file) {
+  if (appMode !== 'staff') { showToast('Sign in as staff to add resources.', 'error'); return; }
+  // Accept any image/* type — we convert everything to JPEG ourselves
+  if (!file.type.startsWith('image/') && file.type !== '') { showToast('Please upload an image file.','error'); return; }
+  const userName = currentUserName || 'Team';
+
+  document.getElementById('dz-idle').style.display='none';
+  document.getElementById('dz-scanning').style.display='block';
+  document.getElementById('dropzone').style.cursor='default';
+
+  try {
+    // Step 1: Convert to JPEG — fixes HEIC/unknown type errors on iPhone
+    const { blob: jpegBlob, base64 } = await toJpegBlobAndBase64(file);
+
+    // Step 2: Upload the JPEG blob to Supabase Storage (non-fatal if fails)
+    const imageUrl = await uploadFlyerImage(jpegBlob);
+    const categoryList = CATEGORIES.map(c=>`"${c.id}" (${c.label})`).join(', ');
+
+    // Step 3: Send the image to the scan-flyer Edge Function.
+    // The Anthropic key lives server-side as a secret — it never touches the browser.
+    // supabase-js automatically attaches the signed-in user's token, so only staff can call it.
+    const { data: fnData, error: fnError } = await sb.functions.invoke('scan-flyer', {
+      body: { image: base64, categoryList }
+    });
+
+    if (fnError) { showToast('Scan failed: ' + (fnError.message || 'function error'), 'error'); return; }
+    if (fnData && fnData.error) { showToast('Scan failed: ' + fnData.error, 'error'); return; }
+
+    const text = (fnData && fnData.text) || '';
+    const parsed = JSON.parse(text.replace(/```json|```/gi,'').trim());
+
+    const newResource = {
+      name: parsed.name,
+      category: parsed.category,
+      summary: parsed.summary,
+      phone: parsed.phone||null,
+      address: parsed.address||null,
+      website: parsed.website||null,
+      email: parsed.email||null,
+      hours: parsed.hours||null,
+      eligibility: parsed.eligibility||null,
+      services: JSON.stringify(parsed.services||[]),
+      notes: parsed.notes||null,
+      is_recurring: parsed.is_recurring||false,
+      date_display: parsed.date_display||null,
+      expiry_date: parsed.expiry_date||null,
+      added_by: userName,
+      image_url: imageUrl||null,
+    };
+
+    // Before saving, check for likely duplicates already in the library.
+    const matches = findSimilar(newResource);
+    if (matches.length > 0) {
+      pendingResource = newResource;
+      showDuplicateModal(newResource, matches);
+    } else {
+      await commitResource(newResource);
+    }
+
+  } catch(err) {
+    console.error(err);
+    showToast('Error: ' + (err.message || 'Check browser console for details'), 'error');
+  } finally {
+    document.getElementById('dz-idle').style.display='block';
+    document.getElementById('dz-scanning').style.display='none';
+    document.getElementById('dropzone').style.cursor='pointer';
+  }
+}
+
+// ── DUPLICATE DETECTION ──
+let pendingResource = null;
+
+const DUP_STOPWORDS = new Set(['the','a','an','of','and','for','to','inc','llc','co','center','centre','services','service','program','programs','community','resource','resources','foundation','organization','org']);
+
+function normName(s){ return (s||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim(); }
+function normPhone(s){ return (s||'').replace(/\D/g,''); }
+
+function findSimilar(candidate) {
+  const cName = normName(candidate.name);
+  const cPhone = normPhone(candidate.phone);
+  const cTokens = new Set(cName.split(' ').filter(w => w && !DUP_STOPWORDS.has(w)));
+
+  return resources.filter(r => {
+    if (cName && normName(r.name) === cName) return true;            // same name
+    const rPhone = normPhone(r.phone);
+    if (cPhone.length >= 7 && cPhone === rPhone) return true;        // same phone
+    // significant word overlap (catches "Westside Food Bank" vs "Westside Community Food Bank")
+    const rTokens = new Set(normName(r.name).split(' ').filter(w => w && !DUP_STOPWORDS.has(w)));
+    if (cTokens.size && rTokens.size) {
+      let shared = 0;
+      cTokens.forEach(t => { if (rTokens.has(t)) shared++; });
+      const smaller = Math.min(cTokens.size, rTokens.size);
+      if (shared >= 1 && shared / smaller >= 0.6) return true;
+    }
+    return false;
+  });
+}
+
+function showDuplicateModal(candidate, matches) {
+  const cards = matches.slice(0,4).map(r => {
+    const cat = CAT[r.category]||CAT.other;
+    return `<div class="dup-match" data-id="${r.id}">
+      <div class="dup-match-top" style="background:${cat.color}">
+        <span>${cat.icon}</span><span class="dup-match-cat">${cat.label}</span>
+      </div>
+      <div class="dup-match-body">
+        <div class="dup-match-name">${esc(r.name)}</div>
+        <div class="dup-match-sum">${esc(r.summary)}</div>
+        <div class="dup-match-meta">${r.phone?'📞 '+esc(r.phone)+' · ':''}Added by ${esc(r.added_by||'Team')} · tap to view</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('dup-modal-body').innerHTML = `
+    <div class="dup-warn">⚠️ This looks similar to something already saved</div>
+    <div class="dup-lead">You just scanned <strong>${esc(candidate.name)}</strong>. It closely matches ${matches.length>1?'these existing entries':'an existing entry'}:</div>
+    ${cards}
+    <div class="dup-actions"><button class="dup-btn-add" id="dup-add">+ Add anyway</button></div>
+    <button class="dup-btn-discard" id="dup-discard">Discard the new scan</button>
+  `;
+
+  document.querySelectorAll('#dup-modal-body .dup-match[data-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      pendingResource = null;
+      closeDuplicateModal();
+      openDetail(Number(el.dataset.id));
+    });
+  });
+  document.getElementById('dup-add').onclick = () => commitPendingResource();
+  document.getElementById('dup-discard').onclick = () => {
+    pendingResource = null;
+    closeDuplicateModal();
+    showToast('Scan discarded — nothing was added.');
+  };
+
+  document.getElementById('dup-modal').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDuplicateModal() {
+  document.getElementById('dup-modal').classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+async function commitPendingResource() {
+  if (!pendingResource) return;
+  const r = pendingResource;
+  pendingResource = null;
+  closeDuplicateModal();
+  await commitResource(r);
+}
+
+// Shared save path used by both the no-duplicate scan and the "Add anyway" choice
+async function commitResource(r) {
+  try {
+    const saved = await saveResource(r);
+    resources.unshift(saved||r);
+    updateLibCount();
+    showToast(`✓ "${r.name}" saved to team library!`);
+    showView('library');
+  } catch(e) {
+    console.error('commitResource error:', e);
+    showToast('Error saving: ' + (e.message || 'see console'), 'error');
+  }
+}
+
+// ── EVENT DATE HELPERS ──
+function parseDateLocal(dateStr) {
+  const [y,m,d] = dateStr.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+
+function expiryStatus(r) {
+  const displayText = (typeof r === 'object' ? r.date_display : null) || null;
+  const dateStr     = (typeof r === 'object' ? r.expiry_date  : r)    || null;
+
+  // Non-date display (recurring, "before Month", freeform) — neutral, never red
+  if (displayText && !dateStr) return { label:`📅 ${displayText}`, cls:'expiry-none', daysLeft:null };
+  if (!dateStr) return { label:'No date', cls:'expiry-none', daysLeft:null };
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const exp   = parseDateLocal(dateStr);
+  const days  = Math.round((exp - today) / 86400000);
+  const formatted = displayText || exp.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+
+  if (days < 0)           return { label:`📅 ${formatted}`, cls:'expiry-expired', daysLeft:days };
+  if (days <= WARN_DAYS)  return { label:`📅 ${formatted}`, cls:'expiry-warn',    daysLeft:days };
+  return                         { label:`📅 ${formatted}`, cls:'expiry-ok',      daysLeft:days };
+}
+
+// ── RECENT ──
+function renderRecent() {
+  const section=document.getElementById('recent-section');
+  const list=document.getElementById('recent-list');
+  if(resources.length===0){section.style.display='none';return;}
+  section.style.display='block';
+  list.innerHTML=resources.slice(0,4).map(r=>{
+    const cat=CAT[r.category]||CAT.other;
+    const exp=expiryStatus(r);
+    return `<div class="recent-card" onclick="openDetail(${r.id})">
+      <div class="recent-dot" style="background:${cat.color}"></div>
+      <div class="recent-info">
+        <div class="recent-name">${esc(r.name)}</div>
+        <div class="recent-cat">${cat.icon} ${cat.label} · Added by ${esc(r.added_by||'Team')}</div>
+      </div>
+      <span class="expiry-badge ${exp.cls}">${exp.label}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── LIBRARY ──
+let searchQuery = '';
+
+function renderLibrary() { renderFilters(); renderGrid(); }
+
+function onSearch() {
+  searchQuery = document.getElementById('search-input').value.trim().toLowerCase();
+  document.getElementById('search-clear').style.display = searchQuery ? 'block' : 'none';
+  renderGrid();
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  searchQuery = '';
+  document.getElementById('search-clear').style.display = 'none';
+  renderGrid();
+}
+
+function renderFilters() {
+  const row=document.getElementById('filter-row');
+  const counts={};
+  CATEGORIES.forEach(c=>counts[c.id]=resources.filter(r=>r.category===c.id).length);
+  const used=CATEGORIES.filter(c=>counts[c.id]>0);
+  row.innerHTML=`<button class="chip ${activeFilter==='all'?'active':''}" onclick="setFilter('all')">All (${resources.length})</button>`
+    +used.map(c=>`<button class="chip ${activeFilter===c.id?'active':''}"
+      style="${activeFilter===c.id?`background:${c.color};border-color:${c.color}`:''}"
+      onclick="setFilter('${c.id}')">${c.icon} ${c.label} (${counts[c.id]})</button>`).join('');
+}
+
+function setFilter(id) { activeFilter=id; renderGrid(); }
+
+// Track which accordion groups are open
+const openGroups = new Set();
+
+function toggleGroup(catId) {
+  if (openGroups.has(catId)) openGroups.delete(catId);
+  else openGroups.add(catId);
+  const el = document.getElementById('cat-group-'+catId);
+  if (el) el.classList.toggle('open', openGroups.has(catId));
+}
+
+function renderGrid() {
+  const accordion = document.getElementById('accordion-container');
+  const flatGrid = document.getElementById('resource-grid');
+  const emptyMain = document.getElementById('library-empty');
+  const emptySearch = document.getElementById('search-empty');
+
+  let filtered = activeFilter==='all' ? resources : resources.filter(r=>r.category===activeFilter);
+
+  // Apply search
+  if (searchQuery) {
+    filtered = filtered.filter(r =>
+      (r.name||'').toLowerCase().includes(searchQuery) ||
+      (r.summary||'').toLowerCase().includes(searchQuery) ||
+      (r.address||'').toLowerCase().includes(searchQuery) ||
+      (r.eligibility||'').toLowerCase().includes(searchQuery) ||
+      (r.notes||'').toLowerCase().includes(searchQuery)
+    );
+  }
+
+  emptyMain.style.display = resources.length===0 ? 'block' : 'none';
+  emptySearch.style.display = resources.length>0 && filtered.length===0 ? 'block' : 'none';
+
+  // If searching or a specific category filter is active, use flat grid for simplicity
+  if (searchQuery || activeFilter !== 'all') {
+    accordion.style.display = 'none';
+    flatGrid.style.display = '';
+    flatGrid.innerHTML = filtered.map(r => renderCard(r)).join('');
+    flatGrid.querySelectorAll('.resource-card[data-id]').forEach(el => {
+      el.addEventListener('click', () => openDetail(Number(el.dataset.id)));
+    });
+    return;
+  }
+
+  // Accordion mode: group by category
+  accordion.style.display = '';
+  flatGrid.style.display = 'none';
+
+  if (filtered.length === 0) { accordion.innerHTML = ''; return; }
+
+  const usedCats = CATEGORIES.filter(c => filtered.some(r=>r.category===c.id));
+  accordion.innerHTML = usedCats.map(cat => {
+    const catResources = filtered.filter(r=>r.category===cat.id);
+    const isOpen = openGroups.has(cat.id);
+    return `<div class="cat-group ${isOpen?'open':''}" id="cat-group-${cat.id}">
+      <div class="cat-group-header" onclick="toggleGroup('${cat.id}')">
+        <div class="cat-group-header-left">
+          <div class="cat-group-icon" style="width:32px;height:32px;border-radius:8px;background:${cat.color};display:flex;align-items:center;justify-content:center;font-size:16px">${cat.icon}</div>
+          <span class="cat-group-label">${cat.label}</span>
+          <span class="cat-group-count">(${catResources.length})</span>
+        </div>
+        <span class="cat-group-chevron">▼</span>
+      </div>
+      <div class="cat-group-body">
+        <div class="cat-group-grid">
+          ${catResources.map(r=>renderCard(r)).join('')}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Re-attach card click handlers (safe since we use data attributes)
+  accordion.querySelectorAll('.resource-card[data-id]').forEach(el => {
+    el.addEventListener('click', () => openDetail(Number(el.dataset.id)));
+  });
+  flatGrid.querySelectorAll && flatGrid.querySelectorAll('.resource-card[data-id]').forEach(el => {
+    el.addEventListener('click', () => openDetail(Number(el.dataset.id)));
+  });
+}
+
+function renderCard(r) {
+  const cat=CAT[r.category]||CAT.other;
+  const exp=expiryStatus(r);
+  return `<div class="resource-card" data-id="${r.id}">
+    <div class="card-top" style="background:${cat.color}">
+      <span class="card-icon">${cat.icon}</span>
+      <span class="card-cat-label">${cat.label}</span>
+    </div>
+    <div class="card-body">
+      <div class="card-name">${esc(r.name)}</div>
+      <div class="card-summary">${esc(r.summary)}</div>
+      ${r.phone?`<div class="card-contact">📞 ${esc(r.phone)}</div>`:''}
+      ${r.address?`<div class="card-contact">📍 ${esc(r.address)}</div>`:''}
+    </div>
+    <div class="card-footer">
+      <span class="card-footer-link">View Details →</span>
+      <span class="expiry-badge ${exp.cls}">${exp.label}</span>
+    </div>
+  </div>`;
+}
+
+// ── DETAIL ──
+function openDetail(id) {
+  const r=resources.find(x=>x.id===id); if(!r) return;
+  const cat=CAT[r.category]||CAT.other;
+  const exp=expiryStatus(r);
+
+  document.getElementById('btn-delete').onclick=()=>{
+    if(confirm(`Remove "${r.name}" from the team library?`)) deleteResource(id);
+  };
+  document.getElementById('btn-edit').onclick=()=>renderEditForm(id);
+  // Make sure nav buttons are visible (renderEditForm hides them while editing)
+  document.getElementById('btn-edit').style.display='';
+  document.getElementById('btn-delete').style.display='';
+
+  const svcData = typeof r.services === 'string' ? JSON.parse(r.services||'[]') : (r.services||[]);
+  const services=Array.isArray(svcData)&&svcData.length
+    ?`<div class="detail-section"><div class="section-title">Services Offered</div>
+      <div class="tag-list">${svcData.map(s=>`<span class="tag" style="border-color:${cat.color};color:${cat.color}">${esc(s)}</span>`).join('')}</div></div>`:'';
+
+  const contacts=[
+    r.phone   &&`<a href="tel:${esc(r.phone)}" class="contact-item"><span>📞</span><span>${esc(r.phone)}</span></a>`,
+    r.email   &&`<a href="mailto:${esc(r.email)}" class="contact-item"><span>✉️</span><span>${esc(r.email)}</span></a>`,
+    r.website &&`<a href="${esc(r.website)}" target="_blank" class="contact-item"><span>🌐</span><span>${esc(r.website)}</span></a>`,
+    r.address &&`<div class="contact-item"><span>📍</span><span>${esc(r.address)}</span></div>`,
+    r.hours   &&`<div class="contact-item"><span>🕐</span><span>${esc(r.hours)}</span></div>`,
+  ].filter(Boolean).join('');
+
+  // Build the flyer image block — image sits above everything, tappable for fullscreen
+  const flyerHtml = r.image_url ? `
+    <div class="flyer-hero" id="flyer-hero-wrap">
+      <img src="${r.image_url}" alt="Flyer" />
+      <div class="flyer-hero-tap">Tap to view full flyer</div>
+    </div>` : '';
+
+  document.getElementById('detail-content').innerHTML=`
+    ${flyerHtml}
+    <div class="detail-header" style="background:${cat.color}">
+      <div class="detail-cat-icon">${cat.icon}</div>
+      <div>
+        <div class="detail-cat-label">${cat.label}</div>
+        <div class="detail-name">${esc(r.name)}</div>
+      </div>
+    </div>
+    <div class="detail-body">
+      <div class="detail-section">
+        <div class="section-title">Summary</div>
+        <div class="detail-text">${esc(r.summary)}</div>
+      </div>
+      <div class="detail-section">
+        <div class="section-title">Event Date</div>
+        <div class="expiry-row">
+          <span class="expiry-badge ${exp.cls}">${exp.label}</span>
+          ${r.is_recurring ? `<span class="expiry-info">🔁 Recurring — kept in library permanently</span>` :
+            r.expiry_date ? `<span class="expiry-info">Auto-removed 3 days after this date</span>` :
+            r.date_display ? `<span class="expiry-info">Kept in library (no specific end date)</span>` :
+            `<span class="expiry-info">No date found on flyer</span>`}
+        </div>
+      </div>
+      ${services}
+      ${r.eligibility?`<div class="detail-section"><div class="section-title">Who Qualifies</div><div class="detail-text">${esc(r.eligibility)}</div></div>`:''}
+      ${contacts?`<div class="detail-section"><div class="section-title">Contact Info</div><div class="contact-grid">${contacts}</div></div>`:''}
+      ${r.notes?`<div class="detail-section"><div class="section-title">Notes</div><div class="notes-box">${esc(r.notes)}</div></div>`:''}
+      <div class="detail-section">
+        <div class="added-at">Added by ${esc(r.added_by||'Team')} on ${new Date(r.added_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>
+      </div>
+    </div>`;
+
+  // Attach click handler after innerHTML is set — avoids any URL escaping issues
+  if (r.image_url) {
+    document.getElementById('flyer-hero-wrap').addEventListener('click', () => openImgViewer(r.image_url));
+  }
+
+  showViewRaw('detail');
+  window.scrollTo(0,0);
+}
+
+// ── EDIT ──
+function renderEditForm(id) {
+  const r = resources.find(x=>x.id===id);
+  if (!r) return;
+
+  // Hide the edit/delete nav buttons while the form is open (form has its own actions)
+  document.getElementById('btn-edit').style.display='none';
+  document.getElementById('btn-delete').style.display='none';
+
+  const svcData = typeof r.services === 'string' ? JSON.parse(r.services||'[]') : (r.services||[]);
+  const servicesText = Array.isArray(svcData) ? svcData.join('\n') : '';
+
+  const catOptions = CATEGORIES.map(c =>
+    `<option value="${c.id}" ${r.category===c.id?'selected':''}>${c.icon} ${c.label}</option>`
+  ).join('');
+
+  document.getElementById('detail-content').innerHTML = `
+    <div class="edit-field">
+      <label class="edit-label">Name</label>
+      <input class="edit-input" id="edit-name" type="text" value="${esc(r.name)}" />
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">Category</label>
+      <select class="edit-select" id="edit-category">${catOptions}</select>
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">Summary</label>
+      <textarea class="edit-textarea" id="edit-summary">${esc(r.summary)}</textarea>
+    </div>
+    <div class="edit-row">
+      <div class="edit-field">
+        <label class="edit-label">Phone</label>
+        <input class="edit-input" id="edit-phone" type="text" value="${esc(r.phone)}" />
+      </div>
+      <div class="edit-field">
+        <label class="edit-label">Email</label>
+        <input class="edit-input" id="edit-email" type="text" value="${esc(r.email)}" />
+      </div>
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">Website</label>
+      <input class="edit-input" id="edit-website" type="text" value="${esc(r.website)}" />
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">Address</label>
+      <input class="edit-input" id="edit-address" type="text" value="${esc(r.address)}" />
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">Hours</label>
+      <input class="edit-input" id="edit-hours" type="text" value="${esc(r.hours)}" />
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">Who Qualifies</label>
+      <textarea class="edit-textarea" id="edit-eligibility">${esc(r.eligibility)}</textarea>
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">Services (one per line)</label>
+      <textarea class="edit-textarea" id="edit-services">${esc(servicesText)}</textarea>
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">Notes</label>
+      <textarea class="edit-textarea" id="edit-notes">${esc(r.notes)}</textarea>
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">Date Display (human-readable)</label>
+      <input class="edit-input" id="edit-date-display" type="text" value="${esc(r.date_display)}" placeholder="e.g. Every Tuesday at 10am" />
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">Event / Expiry Date</label>
+      <input class="edit-input" id="edit-expiry" type="date" value="${esc(r.expiry_date)}" />
+    </div>
+    <div class="edit-checkbox-row">
+      <input type="checkbox" id="edit-recurring" ${r.is_recurring?'checked':''} />
+      <label for="edit-recurring">🔁 Recurring event — never auto-deleted</label>
+    </div>
+    <div class="edit-actions">
+      <button class="btn-save" id="btn-save-edit">✓ Save changes</button>
+      <button class="btn-cancel" id="btn-cancel-edit">Cancel</button>
+    </div>
+  `;
+
+  document.getElementById('btn-save-edit').onclick = () => saveEdit(id);
+  document.getElementById('btn-cancel-edit').onclick = () => openDetail(id);
+  window.scrollTo(0,0);
+}
+
+async function saveEdit(id) {
+  const services = document.getElementById('edit-services').value
+    .split('\n').map(s=>s.trim()).filter(Boolean);
+
+  const fields = {
+    name:         document.getElementById('edit-name').value.trim() || null,
+    category:     document.getElementById('edit-category').value,
+    summary:      document.getElementById('edit-summary').value.trim() || null,
+    phone:        document.getElementById('edit-phone').value.trim() || null,
+    email:        document.getElementById('edit-email').value.trim() || null,
+    website:      document.getElementById('edit-website').value.trim() || null,
+    address:      document.getElementById('edit-address').value.trim() || null,
+    hours:        document.getElementById('edit-hours').value.trim() || null,
+    eligibility:  document.getElementById('edit-eligibility').value.trim() || null,
+    services:     JSON.stringify(services),
+    notes:        document.getElementById('edit-notes').value.trim() || null,
+    date_display: document.getElementById('edit-date-display').value.trim() || null,
+    expiry_date:  document.getElementById('edit-expiry').value || null,
+    is_recurring: document.getElementById('edit-recurring').checked,
+  };
+
+  if (!fields.name) { showToast('Name cannot be empty.','error'); return; }
+
+  const btn = document.getElementById('btn-save-edit');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  try {
+    const updated = await updateResource(id, fields);
+    const idx = resources.findIndex(r=>r.id===id);
+    if (idx !== -1) resources[idx] = updated || { ...resources[idx], ...fields };
+    showToast('✓ Changes saved.');
+    openDetail(id);
+  } catch(e) {
+    console.error('saveEdit error:', e);
+    showToast('Could not save changes: ' + e.message, 'error');
+    btn.disabled = false; btn.textContent = '✓ Save changes';
+  }
+}
+
+// ── IMAGE VIEWER ──
+function openImgViewer(url) {
+  document.getElementById('img-viewer-img').src = url;
+  document.getElementById('img-viewer').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeImgViewer() {
+  document.getElementById('img-viewer').classList.remove('show');
+  document.getElementById('img-viewer-img').src = '';
+  document.body.style.overflow = '';
+}
+
+function esc(s){ if(!s)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>
