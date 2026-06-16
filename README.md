@@ -1,14 +1,14 @@
 # ResourceFile - Team Toolkit
 
-A web app that turns paper community resource flyers into a searchable, shared digital library. Built for a 10-person social services case management team.
+A web app that turns paper community resource flyers into a searchable, shared digital library. Built for a social services case management team.
 
 **Live app:** [rezourcescanner.netlify.app](https://rezourcescanner.netlify.app)
 
-## The Problem
+## Problem
 
 Case managers collect physical flyers for housing, food, mental health, and other community resources, but flyers get lost, go out of date, and aren't searchable. There was no shared way for staff to know what resources existed or whether they were still current.
 
-## The Solution
+## Solution
 
 Staff scan a flyer with their phone camera. AI reads the flyer and pulls out the resource name, category, contact info, hours, eligibility requirements, and services offered, then saves it to a shared library the whole team can search and browse.
 
