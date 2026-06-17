@@ -2,7 +2,7 @@
 
 A web app that turns paper community resource flyers into a searchable, shared digital library. Built for a social services case management team.
 
-**Live app:** [rezourcescanner.netlify.app](https://rezourcescanner.netlify.app/)
+**Live app:** [rezourcescanner.netlify.app](https://rezourcescanner.netlify.app)
 
 ## Problem
 
@@ -14,42 +14,46 @@ Staff scan a flyer with their phone camera. AI reads the flyer and pulls out the
 
 ## Screenshots
 
-### Scan a flyer
+**Scan a flyer**
+
 Staff take a photo or upload an image. AI handles the data entry.
 
-![Scan a flyer](screenshots/scan-flyer.png)
+<img src="screenshots/scan-flyer.png" alt="Scan a resource flyer" width="280">
 
-### Resource library
+**Resource library**
+
 Every saved resource is sorted into categories and searchable by the whole team.
 
-![Resource library](screenshots/resource-library.png)
+<img src="screenshots/resource-library.png" alt="Resource library view" width="280">
 
-### Resource detail
+**Resource detail**
+
 Each entry includes the original flyer image alongside an AI-generated summary.
 
-![Resource detail](screenshots/resource-detail.png)
+<img src="screenshots/resource-detail.png" alt="Resource detail view" width="280">
 
-### Duplicate detection
+**Duplicate detection**
+
 Before saving, the app checks for similar existing entries so the library stays clean.
 
-![Duplicate detection](screenshots/duplicate-detection.png)
+<img src="screenshots/duplicate-detection.png" alt="Duplicate detection prompt" width="280">
 
 ## Key Features
 
-- **Scan-to-save:** Point a phone camera at any flyer and AI handles the data entry
-- **Smart organization:** Resources are sorted into categories (housing, food, mental health, employment, legal, and more) with a searchable, collapsible library view
-- **Duplicate detection:** Before saving, the app checks for similar existing entries and lets staff confirm, merge, or skip, so the library doesn't get cluttered
-- **Smart expiration handling:** One-time events, recurring programs, and open-ended resources are each treated differently, so time-sensitive flyers age out automatically while ongoing programs stay listed
-- **Edit anytime:** Any field can be corrected after scanning without having to rescan
-- **Staff and public views:** Staff log in to add and manage resources, while a separate read-only view lets clients browse the library without an account
-- **Mobile-first:** Built for quick use on a phone, with support for both photo library uploads and live camera capture
+- **Scan-to-save**: Point a phone camera at any flyer and AI handles the data entry
+- **Smart organization**: Resources are sorted into categories (housing, food, mental health, employment, legal, and more) with a searchable, collapsible library view
+- **Duplicate detection**: Before saving, the app checks for similar existing entries and lets staff confirm, merge, or skip, so the library doesn't get cluttered
+- **Smart expiration handling**: One-time events, recurring programs, and open-ended resources are each treated differently, so time-sensitive flyers age out automatically while ongoing programs stay listed
+- **Edit anytime**: Any field can be corrected after scanning without having to rescan
+- **Staff and public views**: Staff log in to add and manage resources, while a separate read-only view lets clients browse the library without an account
+- **Mobile-first**: Built for quick use on a phone, with support for both photo library uploads and live camera capture
 
 ## Tech Stack
 
-- **Frontend:** HTML, CSS, and JavaScript (single file, no frameworks)
-- **Backend:** Supabase (database, authentication, file storage, serverless functions)
-- **AI:** Anthropic Claude (vision model) for flyer data extraction
-- **Hosting:** Netlify
+- Frontend: HTML, CSS, and JavaScript (single file, no frameworks)
+- Backend: Supabase (database, authentication, file storage, serverless functions)
+- AI: Anthropic Claude (vision model) for flyer data extraction
+- Hosting: Netlify
 
 ## Why This Approach
 
