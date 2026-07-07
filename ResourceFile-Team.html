@@ -589,11 +589,24 @@ async function saveResource(r) {
 
 async function deleteResource(id) {
   if (!sb) return;
+  const target = resources.find(r=>r.id===id);
   await sb.from('resources').delete().eq('id', id);
   resources = resources.filter(r=>r.id!==id);
   updateLibCount();
   showToast('Resource removed from team library.');
   showView('library');
+  deleteFlyerImage(target?.image_url);
+}
+
+// Deletes a flyer image from Storage given its public URL. Best-effort — never
+// blocks the caller or surfaces an error to the user, since the resource/scan
+// decision is already final by the time this runs.
+async function deleteFlyerImage(imageUrl) {
+  if (!sb || !imageUrl) return;
+  const fileName = imageUrl.split('/flyers/').pop();
+  if (!fileName) return;
+  const { error } = await sb.storage.from('flyers').remove([fileName]);
+  if (error) console.error('Failed to delete flyer image:', JSON.stringify(error));
 }
 
 async function updateResource(id, fields) {
@@ -778,7 +791,7 @@ async function processImage(file) {
       notes: parsed.notes||null,
       is_recurring: parsed.is_recurring||false,
       date_display: parsed.date_display||null,
-      expiry_date: parsed.expiry_date||null,
+      expiry_date: parsed.is_recurring ? null : (parsed.expiry_date||null), // recurring events never get an expiry date
       added_by: userName,
       image_url: imageUrl||null,
     };
@@ -805,7 +818,7 @@ async function processImage(file) {
 // ── DUPLICATE DETECTION ──
 let pendingResource = null;
 
-const DUP_STOPWORDS = new Set(['the','a','an','of','and','for','to','inc','llc','co','center','centre','services','service','program','programs','community','resource','resources','foundation','organization','org']);
+const DUP_STOPWORDS = new Set(['the','a','an','of','and','for','to','inc','llc','co','center','centre','services','service','program','programs','community','resource','resources','foundation','organization','org','san','los','las','el','la','de','del','county','city','new','north','south','east','west','greater']);
 
 function normName(s){ return (s||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim(); }
 function normPhone(s){ return (s||'').replace(/\D/g,''); }
@@ -863,9 +876,13 @@ function showDuplicateModal(candidate, matches) {
   });
   document.getElementById('dup-add').onclick = () => commitPendingResource();
   document.getElementById('dup-discard').onclick = () => {
+    const discarded = pendingResource;
     pendingResource = null;
     closeDuplicateModal();
     showToast('Scan discarded — nothing was added.');
+    // The image was already uploaded to Storage in Step 2 of processImage(),
+    // before duplicate detection ran — clean it up now that it's rejected.
+    deleteFlyerImage(discarded?.image_url);
   };
 
   document.getElementById('dup-modal').classList.add('show');

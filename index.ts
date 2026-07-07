@@ -46,22 +46,25 @@ Deno.serve(async (req) => {
 
     const prompt = `You are a case manager assistant. Analyze this resource flyer and extract key info.
 
+LANGUAGE RULE: Detect the primary language of the flyer. Write all text fields (name, summary, eligibility, hours, services, notes) in that same language. If the flyer is in Spanish, respond in Spanish. If it is in English, respond in English. And so on for any other language.
+EXCEPTION: "category" must always be one of the English category IDs listed below — never translated.
+
 Return ONLY a valid JSON object (no markdown, no backticks):
 {
-  "name": "Organization or program name",
+  "name": "Organization or program name — in the flyer's language",
   "category": one of [${categoryList || ""}],
-  "summary": "2-3 sentence plain English summary",
+  "summary": "2-3 sentence summary — in the flyer's language",
   "phone": "phone number or null",
   "address": "address or null",
   "website": "website URL or null",
   "email": "email or null",
-  "hours": "hours of operation or null",
-  "eligibility": "who qualifies or null",
-  "services": ["list", "of", "key", "services"],
-  "notes": "any other important info or null",
+  "hours": "hours of operation or null — in the flyer's language",
+  "eligibility": "who qualifies or null — in the flyer's language",
+  "services": ["list", "of", "key", "services", "in the flyer's language"],
+  "notes": "any other important info or null — in the flyer's language",
   "is_recurring": true or false — true if this is a recurring/ongoing event (e.g. weekly, monthly, every Tuesday),
   "date_display": "Human-readable date label. Rules: (1) Single one-time event: 'Mon Jun 12, 2025 at 2:00 PM' (2) Recurring event: list specific dates+times if shown, e.g. 'Every Tuesday at 10am' or 'Jun 5, Jun 12, Jun 19 at 9am' (3) Deadline/signup window with no event date yet: 'before June 2025' or 'by May 30' (4) Date range: 'Jun 1-15, 2025' (5) No date at all: null",
-  "expiry_date": "YYYY-MM-DD — the LAST or ONLY event/end date for auto-cleanup purposes. For recurring events use null. For 'before Month' deadlines use the last day of that month. For date ranges use the end date. Null if no date found."
+  "expiry_date": "YYYY-MM-DD — the LAST or ONLY event/end date for auto-cleanup purposes. IMPORTANT: if is_recurring is true, this MUST be null — never set a date on a recurring event. For 'before Month' deadlines use the last day of that month. For date ranges use the end date. Null if no date found."
 }`;
 
     // ── Call Anthropic ──

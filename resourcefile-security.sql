@@ -6,6 +6,15 @@
 -- ── 1. RESOURCES TABLE ──
 ALTER TABLE resources ENABLE ROW LEVEL SECURITY;
 
+-- Defensive cleanup: an early build (before this file existed) created ad-hoc
+-- policies granting unauthenticated INSERT/SELECT/DELETE to "public". They
+-- were never defined here so re-running this script alone never removed them —
+-- found still live in production on 2026-07-07, letting anyone add/delete
+-- resources without logging in even though RLS showed as "enabled".
+DROP POLICY IF EXISTS "allow insert" ON resources;
+DROP POLICY IF EXISTS "allow select" ON resources;
+DROP POLICY IF EXISTS "allow delete" ON resources;
+
 -- Anyone (anon youth viewers + signed-in staff) can read
 DROP POLICY IF EXISTS "public read" ON resources;
 CREATE POLICY "public read" ON resources
