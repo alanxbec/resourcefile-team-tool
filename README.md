@@ -61,4 +61,4 @@ The app was built as a single, self-contained file so it could be deployed and m
 
 ## Status
 
-Actively used by the team. Recent work focused on securing the app with proper authentication and access controls ahead of a broader rollout.
+Actively used by the team and expanding to a second team within the organization. Authentication and access controls are in place and locked down. Recent work added multilingual flyer support, so the app detects a flyer's language and keeps saved entries readable in that language, and closed a storage cleanup gap so images from deleted resources or discarded duplicate scans no longer pile up over time.
