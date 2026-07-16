@@ -196,6 +196,9 @@
     .card-contact { font-size:11.5px; color:var(--muted); margin-top:4px; }
     .card-footer { padding:10px 16px; border-top:1px solid #f1f3f6; display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:6px 8px; }
     .card-footer-link { font-size:11px; color:var(--sage); font-weight:700; letter-spacing:.03em; flex-shrink:0; }
+    .card-thumb { position:relative; background:#e9ecf1; }
+    .card-thumb img { width:100%; height:110px; object-fit:cover; display:block; }
+    .card-page-badge { position:absolute; bottom:8px; right:8px; background:rgba(15,17,23,.72); color:#fff; font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:999px; letter-spacing:.02em; pointer-events:none; }
 
     /* ── DETAIL ── */
     #view-detail { max-width:660px; margin:0 auto; }
@@ -229,6 +232,14 @@
     .flyer-hero img { width:100%; display:block; max-height:480px; object-fit:contain; background:#f3f4f6; }
     .flyer-hero-tap { position:absolute; bottom:12px; right:12px; background:rgba(15,17,23,.65); color:#fff; font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:999px; letter-spacing:.02em; pointer-events:none; backdrop-filter:blur(4px); }
     .flyer-hero:active { opacity:.92; }
+    .hero-nav { position:absolute; top:50%; transform:translateY(-50%); width:38px; height:38px; border-radius:50%; border:none;
+      background:rgba(15,17,23,.55); color:#fff; font-size:20px; line-height:1; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; transition:background .18s; backdrop-filter:blur(4px); }
+    .hero-nav:hover { background:rgba(15,17,23,.78); }
+    .hero-prev { left:10px; }
+    .hero-next { right:10px; }
+    .hero-counter { position:absolute; top:12px; left:12px; background:rgba(15,17,23,.65); color:#fff; font-size:11.5px;
+      font-weight:700; padding:4px 11px; border-radius:999px; letter-spacing:.03em; pointer-events:none; backdrop-filter:blur(4px); }
 
     /* ── EDIT FORM ── */
     .btn-edit { background:none; border:1px solid var(--sage); color:var(--sage); cursor:pointer; font-size:12.5px; font-family:var(--sans); padding:7px 13px; border-radius:8px; font-weight:600; transition:all .18s; }
@@ -770,7 +781,13 @@ function showToast(msg,type='success') {
 }
 
 // ── FILE HANDLING ──
-function handleFileChange(e) { const f=e.target.files?.[0]; if(f) processImage(f); e.target.value=''; }
+function handleFileChange(e) {
+  const f=e.target.files?.[0];
+  // While the edit form is open, the same hidden inputs add a page to the resource
+  // being edited instead of scanning a brand-new flyer.
+  if(f) { if (isEditImageSessionActive()) handleEditImageAdd(f); else processImage(f); }
+  e.target.value='';
+}
 function handleDrop(e) { e.preventDefault(); document.getElementById('dropzone').classList.remove('over'); const f=e.dataTransfer.files?.[0]; if(f) processImage(f); }
 
 // ── SCAN ──
@@ -1133,7 +1150,14 @@ function renderGrid() {
 function renderCard(r) {
   const cat=CAT[r.category]||CAT.other;
   const exp=expiryStatus(r);
+  const imgs=getImages(r);
+  // Zero images → no thumbnail at all (never a broken-image icon), same as before multi-image.
+  const thumbHtml = imgs.length ? `<div class="card-thumb">
+      <img src="${esc(imgs[0])}" alt="" loading="lazy" />
+      ${imgs.length>1?`<span class="card-page-badge">📄 1/${imgs.length}</span>`:''}
+    </div>` : '';
   return `<div class="resource-card" data-id="${r.id}">
+    ${thumbHtml}
     <div class="card-top" style="background:${cat.color}">
       <span class="card-icon">${cat.icon}</span>
       <span class="card-cat-label">${cat.label}</span>
@@ -1178,10 +1202,16 @@ function openDetail(id) {
     r.hours   &&`<div class="contact-item"><span>🕐</span><span>${esc(r.hours)}</span></div>`,
   ].filter(Boolean).join('');
 
-  // Build the flyer image block — image sits above everything, tappable for fullscreen
-  const flyerHtml = r.image_url ? `
+  // Build the flyer image block — carousel hero, sits above everything, tappable for fullscreen
+  heroImages = getImages(r);
+  heroIndex = 0;
+  const flyerHtml = heroImages.length ? `
     <div class="flyer-hero" id="flyer-hero-wrap">
-      <img src="${r.image_url}" alt="Flyer" />
+      <img id="flyer-hero-img" src="${esc(heroImages[0])}" alt="Flyer page 1" />
+      ${heroImages.length>1?`
+        <button class="hero-nav hero-prev" aria-label="Previous page" onclick="event.stopPropagation();heroNav(-1)">‹</button>
+        <button class="hero-nav hero-next" aria-label="Next page" onclick="event.stopPropagation();heroNav(1)">›</button>
+        <div class="hero-counter" id="hero-counter">1 / ${heroImages.length}</div>`:''}
       <div class="flyer-hero-tap">Tap to view full flyer</div>
     </div>` : '';
 
@@ -1218,19 +1248,49 @@ function openDetail(id) {
       </div>
     </div>`;
 
-  // Attach click handler after innerHTML is set — avoids any URL escaping issues
-  if (r.image_url) {
-    document.getElementById('flyer-hero-wrap').addEventListener('click', () => openImgViewer(r.image_url));
+  // Attach click handler after innerHTML is set — avoids any URL escaping issues.
+  // The viewer opens at the page the hero is currently showing (kept in sync via heroIndex).
+  if (heroImages.length) {
+    document.getElementById('flyer-hero-wrap').addEventListener('click', () => openImgViewer(heroImages, heroIndex));
   }
+
+  // Leaving edit mode without save/cancel (e.g. re-opening detail) drops any stale image draft.
+  editImageDraft = null;
 
   showViewRaw('detail');
   window.scrollTo(0,0);
 }
 
+// ── DETAIL HERO CAROUSEL ──
+let heroImages = [];
+let heroIndex = 0;
+
+function renderHero() {
+  const img = document.getElementById('flyer-hero-img');
+  if (!img || !heroImages.length) return;
+  img.src = heroImages[heroIndex];
+  img.alt = `Flyer page ${heroIndex+1}`;
+  const counter = document.getElementById('hero-counter');
+  if (counter) counter.textContent = `${heroIndex+1} / ${heroImages.length}`;
+}
+
+function heroNav(dir) {
+  if (heroImages.length < 2) return;
+  heroIndex = (heroIndex + dir + heroImages.length) % heroImages.length; // wraps around
+  renderHero();
+}
+
 // ── EDIT ──
+// Image edits are staged here and only written to the DB on save. `urls` is the working
+// page order; `newUrls` tracks images uploaded during THIS edit session (safe to delete
+// from Storage on remove/cancel because no saved row references them yet).
+let editImageDraft = null; // { resourceId, urls, newUrls }
+
 function renderEditForm(id) {
   const r = resources.find(x=>x.id===id);
   if (!r) return;
+
+  editImageDraft = { resourceId: id, urls: getImages(r).slice(), newUrls: [] };
 
   // Hide the edit/delete nav buttons while the form is open (form has its own actions)
   document.getElementById('btn-edit').style.display='none';
@@ -1244,6 +1304,14 @@ function renderEditForm(id) {
   ).join('');
 
   document.getElementById('detail-content').innerHTML = `
+    <div class="edit-field">
+      <label class="edit-label">Flyer Pages</label>
+      <div class="thumb-strip" id="edit-thumb-strip"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button type="button" class="btn-edit" onclick="document.getElementById('file-input-camera').click()">📷 Add Page (Camera)</button>
+        <button type="button" class="btn-edit" onclick="document.getElementById('file-input-library').click()">🖼 Add Page (Library)</button>
+      </div>
+    </div>
     <div class="edit-field">
       <label class="edit-label">Name</label>
       <input class="edit-input" id="edit-name" type="text" value="${esc(r.name)}" />
@@ -1309,13 +1377,106 @@ function renderEditForm(id) {
   `;
 
   document.getElementById('btn-save-edit').onclick = () => saveEdit(id);
-  document.getElementById('btn-cancel-edit').onclick = () => openDetail(id);
+  document.getElementById('btn-cancel-edit').onclick = () => cancelEdit(id);
+  renderEditImages();
   window.scrollTo(0,0);
+}
+
+// ── EDIT: FLYER PAGE MANAGEMENT ──
+function renderEditImages() {
+  const strip = document.getElementById('edit-thumb-strip');
+  if (!strip || !editImageDraft) return;
+  const urls = editImageDraft.urls;
+  if (!urls.length) {
+    strip.innerHTML = `<div style="font-size:12.5px;color:var(--muted);padding:6px 2px">No flyer pages yet — add one below.</div>`;
+    return;
+  }
+  strip.innerHTML = urls.map((u,i)=>`
+    <div class="thumb-item">
+      <img src="${esc(u)}" alt="Page ${i+1}" loading="lazy" />
+      <span class="thumb-num">${i+1}</span>
+      <button type="button" class="thumb-remove" title="Remove page ${i+1}" aria-label="Remove page ${i+1}" onclick="removeEditImage(${i})">×</button>
+      <div class="thumb-reorder">
+        <button type="button" title="Move earlier" aria-label="Move page ${i+1} earlier" ${i===0?'disabled':''} onclick="moveEditImage(${i},-1)">◀</button>
+        <button type="button" title="Move later" aria-label="Move page ${i+1} later" ${i===urls.length-1?'disabled':''} onclick="moveEditImage(${i},1)">▶</button>
+      </div>
+    </div>`).join('');
+}
+
+function removeEditImage(idx) {
+  if (!editImageDraft) return;
+  const [url] = editImageDraft.urls.splice(idx, 1);
+  const ni = editImageDraft.newUrls.indexOf(url);
+  if (ni !== -1) {
+    // Uploaded during this session and never saved — no DB row references it, so
+    // it's safe (and correct) to delete from Storage right away.
+    editImageDraft.newUrls.splice(ni, 1);
+    deleteFlyerImages([url]);
+  }
+  // Pre-existing images are only removed from the draft — the saved row still
+  // references them until Save succeeds, so Storage is left untouched here.
+  renderEditImages();
+}
+
+// Simple button-based reorder (deliberately not drag-and-drop: less code, no
+// touch-gesture edge cases, easier to maintain long-term).
+function moveEditImage(idx, dir) {
+  if (!editImageDraft) return;
+  const urls = editImageDraft.urls;
+  const j = idx + dir;
+  if (j < 0 || j >= urls.length) return;
+  [urls[idx], urls[j]] = [urls[j], urls[idx]];
+  renderEditImages();
+}
+
+// True while the edit form's image strip is on screen — used to route the shared
+// file inputs to "add a page" instead of the scanner's full scan pipeline.
+function isEditImageSessionActive() {
+  return !!(editImageDraft && document.getElementById('edit-thumb-strip'));
+}
+
+async function handleEditImageAdd(file) {
+  if (!file.type.startsWith('image/') && file.type !== '') { showToast('Please upload an image file.','error'); return; }
+  showLoading('Uploading page...');
+  try {
+    const { blob } = await toJpegBlobAndBase64(file); // same HEIC-safe JPEG conversion as the scanner
+    const url = await uploadFlyerImage(blob);
+    if (!url) { showToast('Upload failed — check your connection and try again.','error'); return; }
+    if (!editImageDraft) { deleteFlyerImages([url]); return; } // edit closed mid-upload — don't orphan
+    editImageDraft.urls.push(url);
+    editImageDraft.newUrls.push(url);
+    renderEditImages();
+    showToast('✓ Page added — save changes to keep it.');
+  } catch(e) {
+    console.error('handleEditImageAdd error:', e);
+    showToast('Error adding page: ' + (e.message || 'try again'), 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+function cancelEdit(id) {
+  const draft = editImageDraft;
+  if (draft && draft.resourceId === id && draft.newUrls.length) {
+    const n = draft.newUrls.length;
+    if (!confirm(`Discard ${n} newly added page${n===1?'':'s'}? ${n===1?'It':'They'} will be deleted.`)) return;
+    // Never saved, so no row references them — clean them out of Storage.
+    deleteFlyerImages(draft.newUrls.slice());
+  }
+  editImageDraft = null;
+  openDetail(id);
 }
 
 async function saveEdit(id) {
   const services = document.getElementById('edit-services').value
     .split('\n').map(s=>s.trim()).filter(Boolean);
+
+  // Snapshot what the saved row references RIGHT NOW, before any DB write —
+  // this is the only safe baseline for deciding what to delete from Storage later.
+  const current = resources.find(r=>r.id===id);
+  const originalImages = getImages(current);
+  const draft = (editImageDraft && editImageDraft.resourceId === id) ? editImageDraft : null;
+  const finalImages = draft ? draft.urls.slice() : originalImages.slice();
 
   const fields = {
     name:         document.getElementById('edit-name').value.trim() || null,
@@ -1332,6 +1493,10 @@ async function saveEdit(id) {
     date_display: document.getElementById('edit-date-display').value.trim() || null,
     expiry_date:  document.getElementById('edit-expiry').value || null,
     is_recurring: document.getElementById('edit-recurring').checked,
+    // New canonical image list; image_url mirrors image_urls[0] for back-compat
+    // with anything still reading the old scalar column.
+    image_urls:   finalImages,
+    image_url:    finalImages[0] || null,
   };
 
   if (!fields.name) { showToast('Name cannot be empty.','error'); return; }
@@ -1343,6 +1508,11 @@ async function saveEdit(id) {
     const updated = await updateResource(id, fields);
     const idx = resources.findIndex(r=>r.id===id);
     if (idx !== -1) resources[idx] = updated || { ...resources[idx], ...fields };
+    // DB write succeeded — only NOW is it safe to delete Storage objects the row
+    // no longer references. (On failure nothing is deleted; the draft survives.)
+    const dropped = originalImages.filter(u => !finalImages.includes(u));
+    if (dropped.length) deleteFlyerImages(dropped);
+    editImageDraft = null;
     showToast('✓ Changes saved.');
     openDetail(id);
   } catch(e) {
