@@ -284,6 +284,20 @@
     #img-viewer-close { position:absolute; top:16px; right:18px; background:rgba(255,255,255,.15); border:none; color:#fff; font-size:22px; cursor:pointer; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; transition:background .18s; }
     #img-viewer-close:hover { background:rgba(255,255,255,.25); }
 
+    /* ── SHARED THUMBNAIL STRIP (contract component — used by the staging tray and the edit-images field) ── */
+    .thumb-strip { display:flex; gap:8px; overflow-x:auto; padding:4px 2px; scroll-snap-type:x proximity; }
+    .thumb-item { position:relative; flex:0 0 auto; width:84px; aspect-ratio:3/4; border-radius:10px; overflow:hidden;
+      border:1px solid var(--border-strong); background:#e9ecf1; scroll-snap-align:start; }
+    .thumb-item img { width:100%; height:100%; object-fit:cover; display:block; }
+    .thumb-num { position:absolute; top:4px; left:4px; background:rgba(15,17,23,.65); color:#fff; font-size:10px;
+      font-weight:700; padding:1px 6px; border-radius:999px; }
+    .thumb-remove { position:absolute; top:2px; right:2px; width:22px; height:22px; border-radius:50%; border:none;
+      background:rgba(15,17,23,.7); color:#fff; font-size:14px; line-height:1; cursor:pointer; }
+    .thumb-reorder { position:absolute; bottom:2px; right:2px; display:flex; gap:2px; }
+    .thumb-reorder button { width:20px; height:20px; border-radius:5px; border:none; background:rgba(15,17,23,.7);
+      color:#fff; font-size:10px; cursor:pointer; }
+    .thumb-reorder button:disabled { opacity:.35; cursor:default; }
+
     /* ── LOADING OVERLAY ── */
     #loading { display:none; position:fixed; inset:0; background:rgba(15,17,23,.75); backdrop-filter:blur(4px); z-index:var(--z-overlay); align-items:center; justify-content:center; flex-direction:column; gap:14px; }
     #loading.show { display:flex; }
@@ -576,12 +590,16 @@ async function loadResources() {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - GRACE_DAYS);
     const cutoffStr = cutoff.toISOString().split('T')[0];
-    await sb.from('resources')
-      .delete()
+    const { data: expiring } = await sb.from('resources')
+      .select('id, image_url, image_urls')
       .not('expiry_date', 'is', null)
       .neq('is_recurring', true)
       .lt('expiry_date', cutoffStr)
       .gte('expiry_date', '2020-01-01'); // floor to avoid bad dates
+    if (expiring && expiring.length) {
+      await sb.from('resources').delete().in('id', expiring.map(r => r.id));
+      deleteFlyerImages(expiring.flatMap(getImages)); // best-effort, fire-and-forget — closes the orphan gap this delete used to leave
+    }
   }
 
   const { data, error } = await sb.from('resources').select('*').order('added_at',{ascending:false});
@@ -623,18 +641,32 @@ async function deleteResource(id) {
   updateLibCount();
   showToast('Resource removed from team library.');
   showView('library');
-  deleteFlyerImage(target?.image_url);
+  deleteFlyerImages(getImages(target));
 }
 
-// Deletes a flyer image from Storage given its public URL. Best-effort — never
+// ── IMAGE HELPERS (shared contract — every image read/delete path goes through these) ──
+// Resolves a resource's images. New rows use `image_urls` (array); old rows fall back to
+// the single `image_url` column so pre-migration data keeps working with zero backfill.
+function getImages(r) {
+  if (!r) return [];
+  if (Array.isArray(r.image_urls) && r.image_urls.length) return r.image_urls;
+  return r.image_url ? [r.image_url] : [];
+}
+
+// Deletes flyer images from Storage given their public URLs. Best-effort — never
 // blocks the caller or surfaces an error to the user, since the resource/scan
 // decision is already final by the time this runs.
+async function deleteFlyerImages(imageUrls) {
+  if (!sb || !Array.isArray(imageUrls) || !imageUrls.length) return;
+  const fileNames = imageUrls.map(u => u && u.split('/flyers/').pop()).filter(Boolean);
+  if (!fileNames.length) return;
+  const { error } = await sb.storage.from('flyers').remove(fileNames);
+  if (error) console.error('Failed to delete flyer images:', JSON.stringify(error));
+}
+// Back-compat single-image wrapper — kept so any single-URL caller still works.
 async function deleteFlyerImage(imageUrl) {
-  if (!sb || !imageUrl) return;
-  const fileName = imageUrl.split('/flyers/').pop();
-  if (!fileName) return;
-  const { error } = await sb.storage.from('flyers').remove([fileName]);
-  if (error) console.error('Failed to delete flyer image:', JSON.stringify(error));
+  if (!imageUrl) return;
+  await deleteFlyerImages([imageUrl]);
 }
 
 async function updateResource(id, fields) {
