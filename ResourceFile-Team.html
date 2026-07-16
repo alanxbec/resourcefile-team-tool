@@ -298,6 +298,20 @@
       color:#fff; font-size:10px; cursor:pointer; }
     .thumb-reorder button:disabled { opacity:.35; cursor:default; }
 
+    /* ── STAGING TRAY ── */
+    #staging-tray { margin-bottom:32px; }
+    .staging-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; box-shadow:var(--shadow); }
+    .staging-title { font-size:16px; font-weight:700; color:var(--ink); overflow:hidden; text-overflow:ellipsis; }
+    .staging-sub { font-size:12.5px; color:var(--muted); margin:2px 0 14px; }
+    .staging-sub strong { color:var(--sage); }
+    .staging-status { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--sage); font-weight:600; margin-top:10px; }
+    .staging-status::before { content:''; width:14px; height:14px; border:2px solid #d1ede9; border-top-color:var(--sage); border-radius:50%; animation:spin .75s linear infinite; }
+    .staging-actions { display:flex; gap:10px; flex-wrap:wrap; margin:14px 0 10px; }
+    .staging-actions button { flex:1; min-width:150px; }
+    #staging-tray button:disabled { opacity:.55; cursor:default; }
+    .staging-discard { width:100%; margin-top:6px; background:none; border:none; color:var(--muted); font-size:12.5px; cursor:pointer; padding:8px; font-family:var(--sans); }
+    .staging-discard:hover { color:var(--red); }
+
     /* ── LOADING OVERLAY ── */
     #loading { display:none; position:fixed; inset:0; background:rgba(15,17,23,.75); backdrop-filter:blur(4px); z-index:var(--z-overlay); align-items:center; justify-content:center; flex-direction:column; gap:14px; }
     #loading.show { display:flex; }
@@ -371,7 +385,7 @@
     <!-- SCANNER VIEW -->
     <div id="view-scanner" class="view">
       <div class="scan-title">Scan a Resource Flyer</div>
-      <p class="scan-sub">Take a photo or upload a flyer image. AI extracts the info and saves it to your team's shared library instantly.</p>
+      <p class="scan-sub">Take a photo or upload a flyer image. AI reads the first page — then add the flyer's remaining pages and save when you're done.</p>
 
       <div class="dropzone" id="dropzone"
            ondragover="event.preventDefault();this.classList.add('over')"
@@ -391,7 +405,23 @@
         <div id="dz-scanning" style="display:none">
           <div class="spinner"></div>
           <div class="scanning-text">Reading flyer...</div>
-          <div class="scanning-sub">Extracting info & saving to team library</div>
+          <div class="scanning-sub">Extracting info from the first page</div>
+        </div>
+      </div>
+
+      <!-- STAGING TRAY — pages scanned but not yet saved to the library -->
+      <div id="staging-tray" style="display:none">
+        <div class="staging-card">
+          <div class="staging-title" id="staging-name"></div>
+          <div class="staging-sub"><strong id="staging-count">0 pages</strong> staged — nothing is saved to the library until you hit Save</div>
+          <div class="thumb-strip" id="staging-strip"></div>
+          <div class="staging-status" id="staging-status" style="display:none"></div>
+          <div class="staging-actions">
+            <button class="btn-dark" onclick="document.getElementById('file-input-camera').click()">📷 Add another page</button>
+            <button class="btn-dark" onclick="document.getElementById('file-input-library').click()">🖼 From library</button>
+          </div>
+          <button class="btn-primary" id="staging-save" onclick="stagingSaveResource()">✓ Save resource (1 page)</button>
+          <button class="staging-discard" onclick="discardStaging()">Discard this scan</button>
         </div>
       </div>
 
@@ -751,8 +781,16 @@ function showViewRaw(name) {
 async function showView(name) {
   // Youth (read-only) can never reach the scanner
   if (name==='scanner' && appMode!=='staff') name='library';
+  // Navigate-away guard: leaving mid-staging means abandoning the unsaved scan.
+  // On confirm, run the same discard-and-cleanup path as discardStaging().
+  if (stagingActive && name !== 'scanner') {
+    const n = pendingResource ? getImages(pendingResource).length : 0;
+    if (!confirm(`You have an unsaved scan (${n} page${n===1?'':'s'}). Leave and discard it?`)) return;
+    cleanupStaging();
+    showToast('Scan discarded — nothing was added.');
+  }
   showViewRaw(name);
-  if (name==='scanner') { await loadResources(); renderRecent(); }
+  if (name==='scanner' && !stagingActive) { await loadResources(); renderRecent(); }
   if (name==='library') { await loadResources(); renderLibrary(); }
   window.scrollTo(0,0);
 }
@@ -810,6 +848,16 @@ async function processImage(file) {
   if (appMode !== 'staff') { showToast('Sign in as staff to add resources.', 'error'); return; }
   // Accept any image/* type — we convert everything to JPEG ourselves
   if (!file.type.startsWith('image/') && file.type !== '') { showToast('Please upload an image file.','error'); return; }
+
+  // (c) Adding a page from the Edit screen — implemented by the edit-images slice.
+  // The flag is the shared hook; this branch intentionally does nothing here.
+  if (editAddingImagesFor !== null) return;
+
+  // (b) Adding a page to an in-progress staging tray — upload only, no AI pass.
+  // The flyer's identity (name/phone/etc.) was extracted from page 1 and won't change.
+  if (stagingActive && pendingResource) { await stagingAddPage(file); return; }
+
+  // (a) First page of a brand-new scan — AI extraction, then stage (never instant-save).
   const userName = currentUserName || 'Team';
 
   document.getElementById('dz-idle').style.display='none';
@@ -854,15 +902,17 @@ async function processImage(file) {
       expiry_date: parsed.is_recurring ? null : (parsed.expiry_date||null), // recurring events never get an expiry date
       added_by: userName,
       image_url: imageUrl||null,
+      image_urls: imageUrl ? [imageUrl] : [],
     };
 
-    // Before saving, check for likely duplicates already in the library.
+    // Duplicate check runs exactly once, right after page 1 — the identifying
+    // fields (name/phone) are fixed from here on, so it is never re-run at save.
+    pendingResource = newResource;
     const matches = findSimilar(newResource);
     if (matches.length > 0) {
-      pendingResource = newResource;
       showDuplicateModal(newResource, matches);
     } else {
-      await commitResource(newResource);
+      startStagingTray(newResource);
     }
 
   } catch(err) {
@@ -934,7 +984,12 @@ function showDuplicateModal(candidate, matches) {
       openDetail(Number(el.dataset.id));
     });
   });
-  document.getElementById('dup-add').onclick = () => commitPendingResource();
+  document.getElementById('dup-add').onclick = () => {
+    // "Add anyway" enters the staging tray (so more pages can be added) — it no longer commits immediately.
+    if (!pendingResource) return;
+    closeDuplicateModal();
+    startStagingTray(pendingResource);
+  };
   document.getElementById('dup-discard').onclick = () => {
     const discarded = pendingResource;
     pendingResource = null;
@@ -954,15 +1009,8 @@ function closeDuplicateModal() {
   document.body.style.overflow = '';
 }
 
-async function commitPendingResource() {
-  if (!pendingResource) return;
-  const r = pendingResource;
-  pendingResource = null;
-  closeDuplicateModal();
-  await commitResource(r);
-}
-
-// Shared save path used by both the no-duplicate scan and the "Add anyway" choice
+// Shared save path — reached only via the staging tray's "Save resource" button now.
+// Returns true on success / false on failure so the tray can stay open when a save fails.
 async function commitResource(r) {
   try {
     const saved = await saveResource(r);
@@ -970,11 +1018,135 @@ async function commitResource(r) {
     updateLibCount();
     showToast(`✓ "${r.name}" saved to team library!`);
     showView('library');
+    return true;
   } catch(e) {
     console.error('commitResource error:', e);
     showToast('Error saving: ' + (e.message || 'see console'), 'error');
+    return false;
   }
 }
+
+// ── STAGING TRAY ──
+// Scanning no longer commits instantly. Page 1 lands here after AI extraction;
+// staff add the flyer's remaining pages, can remove a mis-scan, then explicitly
+// Save or Discard. Nothing touches the resources table until stagingSaveResource().
+let stagingActive = false;
+let stagingBusy = false;
+// Shared hook for the edit-images slice: when set to a resource id, processImage
+// routes new photos to the Edit screen's add-page flow instead of a new scan.
+// The Edit-side behavior itself lives in that slice, not here.
+let editAddingImagesFor = null;
+
+function startStagingTray(r) {
+  pendingResource = r;
+  if (!Array.isArray(r.image_urls)) r.image_urls = r.image_url ? [r.image_url] : [];
+  stagingActive = true;
+  document.getElementById('dropzone').style.display = 'none';
+  document.getElementById('recent-section').style.display = 'none';
+  document.getElementById('staging-tray').style.display = 'block';
+  renderStagingTray();
+}
+
+function renderStagingTray() {
+  const r = pendingResource;
+  if (!r) return;
+  const urls = r.image_urls || [];
+  const n = urls.length;
+  document.getElementById('staging-name').textContent = r.name || 'Untitled resource';
+  document.getElementById('staging-count').textContent = `${n} page${n===1?'':'s'}`;
+  const strip = document.getElementById('staging-strip');
+  strip.innerHTML = urls.map((u, i) => `
+    <div class="thumb-item">
+      <img src="${esc(u)}" alt="Page ${i+1}" />
+      <span class="thumb-num">${i+1}</span>
+      <button class="thumb-remove" data-idx="${i}" title="Remove page ${i+1}" aria-label="Remove page ${i+1}">×</button>
+    </div>`).join('');
+  strip.querySelectorAll('.thumb-remove').forEach(btn =>
+    btn.addEventListener('click', () => stagingRemovePage(Number(btn.dataset.idx))));
+  document.getElementById('staging-save').textContent = `✓ Save resource (${n} page${n===1?'':'s'})`;
+}
+
+// Branch (b) of processImage: page 2+ of an in-progress scan — upload only, no AI pass.
+async function stagingAddPage(file) {
+  if (stagingBusy) return;
+  setStagingBusy(true, 'Uploading page…');
+  try {
+    const { blob: jpegBlob } = await toJpegBlobAndBase64(file);
+    const imageUrl = await uploadFlyerImage(jpegBlob);
+    // Staging may have been torn down while the upload was in flight (nav-away) — don't orphan the page.
+    if (!stagingActive || !pendingResource) { if (imageUrl) deleteFlyerImages([imageUrl]); return; }
+    if (!imageUrl) { showToast('Upload failed — page not added. Try again.', 'error'); return; }
+    pendingResource.image_urls.push(imageUrl);
+    renderStagingTray();
+  } catch(err) {
+    console.error(err);
+    showToast('Error adding page: ' + (err.message || 'see console'), 'error');
+  } finally {
+    setStagingBusy(false);
+  }
+}
+
+// Removing a staged page hard-deletes it from Storage immediately — safe, because
+// nothing has been written to the resources table yet at this point.
+function stagingRemovePage(idx) {
+  const r = pendingResource;
+  if (!r || stagingBusy || !Array.isArray(r.image_urls) || idx < 0 || idx >= r.image_urls.length) return;
+  if (!confirm(`Remove page ${idx+1} from this scan? The photo will be deleted.`)) return;
+  const removed = r.image_urls.splice(idx, 1);
+  renderStagingTray();
+  deleteFlyerImages(removed); // best-effort
+}
+
+function discardStaging() {
+  const r = pendingResource;
+  if (!r || stagingBusy) return;
+  const n = (r.image_urls || []).length;
+  if (!confirm(`Discard this scan?${n ? ` All ${n} uploaded page${n===1?'':'s'} will be deleted.` : ''} Nothing will be added to the library.`)) return;
+  cleanupStaging();
+  showToast('Scan discarded — nothing was added.');
+}
+
+// Shared teardown used by discardStaging() and the navigate-away guard in showView().
+function cleanupStaging() {
+  const r = pendingResource;
+  pendingResource = null;
+  stagingActive = false;
+  setStagingBusy(false);
+  if (r) deleteFlyerImages(getImages(r)); // best-effort Storage cleanup
+  document.getElementById('staging-tray').style.display = 'none';
+  document.getElementById('dropzone').style.display = '';
+  renderRecent();
+}
+
+async function stagingSaveResource() {
+  const r = pendingResource;
+  if (!r || stagingBusy) return;
+  r.image_url = (Array.isArray(r.image_urls) && r.image_urls[0]) || null; // back-compat for single-image readers
+  setStagingBusy(true, 'Saving…');
+  stagingActive = false; // lift the nav guard so commitResource can navigate to the Library
+  const ok = await commitResource(r);
+  setStagingBusy(false);
+  if (!ok) { stagingActive = true; return; } // save failed — keep the tray open so the scan isn't lost
+  pendingResource = null;
+  document.getElementById('staging-tray').style.display = 'none';
+  document.getElementById('dropzone').style.display = '';
+}
+
+// Loading/disabled state for the tray during async work (uploads, save).
+function setStagingBusy(busy, msg) {
+  stagingBusy = busy;
+  document.querySelectorAll('#staging-tray button').forEach(b => b.disabled = busy);
+  const status = document.getElementById('staging-status');
+  status.style.display = busy ? '' : 'none';
+  if (msg) status.textContent = msg;
+}
+
+// Cheap partial mitigation for the accepted orphan gap: warn before the tab closes
+// mid-staging (or with the duplicate modal open). Doesn't fully close the gap —
+// connectivity loss / force-close can still orphan uploaded pages, by design.
+window.addEventListener('beforeunload', (e) => {
+  if (stagingActive || pendingResource) { e.preventDefault(); e.returnValue = ''; }
+});
 
 // ── EVENT DATE HELPERS ──
 function parseDateLocal(dateStr) {
