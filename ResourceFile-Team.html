@@ -278,11 +278,21 @@
     .dup-btn-discard:hover { color:var(--text-2); }
 
     /* ── FULL SCREEN VIEWER ── */
-    #img-viewer { display:none; position:fixed; inset:0; background:rgba(0,0,0,.95); z-index:var(--z-viewer); align-items:center; justify-content:center; flex-direction:column; }
-    #img-viewer.show { display:flex; }
-    #img-viewer img { max-width:96vw; max-height:90vh; object-fit:contain; border-radius:6px; }
+    #img-viewer { display:none; position:fixed; inset:0; background:rgba(0,0,0,.95); z-index:var(--z-viewer); }
+    #img-viewer.show { display:block; }
+    .viewer-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; overflow:hidden; touch-action:none; cursor:zoom-in; }
+    .viewer-stage.zoomed { cursor:grab; }
+    .viewer-stage.zoomed.dragging { cursor:grabbing; }
+    #img-viewer-img { max-width:96vw; max-height:90vh; object-fit:contain; border-radius:6px; transform-origin:center center; will-change:transform; transition:transform .18s ease; user-select:none; -webkit-user-drag:none; }
+    .viewer-stage.dragging #img-viewer-img { transition:none; }
     #img-viewer-close { position:absolute; top:16px; right:18px; background:rgba(255,255,255,.15); border:none; color:#fff; font-size:22px; cursor:pointer; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; transition:background .18s; }
     #img-viewer-close:hover { background:rgba(255,255,255,.25); }
+    .viewer-arrow { position:absolute; top:50%; transform:translateY(-50%); background:rgba(255,255,255,.15); border:none; color:#fff; font-size:28px; line-height:1; cursor:pointer; width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; padding-bottom:4px; transition:background .18s; box-shadow:var(--shadow); }
+    .viewer-arrow:hover { background:rgba(255,255,255,.25); }
+    .viewer-arrow-prev { left:14px; }
+    .viewer-arrow-next { right:14px; }
+    .viewer-counter { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); background:rgba(15,17,23,.65); color:#fff; font-size:12.5px; font-weight:600; letter-spacing:.05em; padding:5px 13px; border-radius:var(--radius-sm); pointer-events:none; box-shadow:var(--shadow); }
+    .viewer-arrow[hidden], .viewer-counter[hidden] { display:none; }
 
     /* ── SHARED THUMBNAIL STRIP (contract component — used by the staging tray and the edit-images field) ── */
     .thumb-strip { display:flex; gap:8px; overflow-x:auto; padding:4px 2px; scroll-snap-type:x proximity; }
@@ -444,10 +454,15 @@
 
 <div id="toast"></div>
 
-<!-- FULL SCREEN IMAGE VIEWER -->
-<div id="img-viewer" onclick="closeImgViewer()">
-  <button id="img-viewer-close" onclick="closeImgViewer()">×</button>
-  <img id="img-viewer-img" src="" alt="Flyer" onclick="event.stopPropagation()" />
+<!-- FULL SCREEN IMAGE VIEWER (zoom / pan / carousel) -->
+<div id="img-viewer">
+  <div class="viewer-stage" id="viewer-stage">
+    <img id="img-viewer-img" src="" alt="Flyer" draggable="false" />
+  </div>
+  <button id="img-viewer-close" onclick="closeImgViewer()" aria-label="Close image viewer">×</button>
+  <button class="viewer-arrow viewer-arrow-prev" id="viewer-arrow-prev" onclick="viewerNav(-1)" aria-label="Previous image" hidden>‹</button>
+  <button class="viewer-arrow viewer-arrow-next" id="viewer-arrow-next" onclick="viewerNav(1)" aria-label="Next image" hidden>›</button>
+  <div class="viewer-counter" id="viewer-counter" hidden></div>
 </div>
 
 <!-- DUPLICATE WARNING MODAL -->
@@ -1352,17 +1367,211 @@ async function saveEdit(id) {
   }
 }
 
-// ── IMAGE VIEWER ──
-function openImgViewer(url) {
-  document.getElementById('img-viewer-img').src = url;
+// ── IMAGE VIEWER (zoom / pan / carousel) ──
+// Contract: openImgViewer(images: string[], index: number). A bare string first
+// argument is also tolerated so legacy single-image call sites keep working.
+const VIEWER_MAX_SCALE = 4, VIEWER_MIN_SCALE = 1, VIEWER_TAP_SCALE = 2.5;
+let viewerImages = [];
+let viewerIndex = 0;
+let viewerScale = 1, viewerTX = 0, viewerTY = 0; // translate is in screen px, applied after the scale about the image center
+
+function openImgViewer(images, index) {
+  if (typeof images === 'string') images = [images];
+  viewerImages = (images || []).filter(Boolean);
+  if (!viewerImages.length) return;
+  viewerIndex = Math.min(Math.max(index || 0, 0), viewerImages.length - 1);
   document.getElementById('img-viewer').classList.add('show');
   document.body.style.overflow = 'hidden';
+  viewerShowCurrent();
 }
+
+function viewerShowCurrent() {
+  const multi = viewerImages.length > 1;
+  document.getElementById('img-viewer-img').src = viewerImages[viewerIndex];
+  document.getElementById('viewer-arrow-prev').hidden = !multi;
+  document.getElementById('viewer-arrow-next').hidden = !multi;
+  const counter = document.getElementById('viewer-counter');
+  counter.hidden = !multi;
+  counter.textContent = (viewerIndex + 1) + ' / ' + viewerImages.length;
+  viewerResetZoom(); // zoom/pan always resets on index change
+}
+
 function closeImgViewer() {
   document.getElementById('img-viewer').classList.remove('show');
   document.getElementById('img-viewer-img').src = '';
   document.body.style.overflow = '';
+  viewerImages = []; viewerIndex = 0;
+  viewerResetZoom();
 }
+
+function viewerNav(delta) {
+  const n = viewerImages.length;
+  if (n < 2) return;
+  viewerIndex = (viewerIndex + delta + n) % n;
+  viewerShowCurrent();
+}
+
+function viewerResetZoom() {
+  viewerScale = 1; viewerTX = 0; viewerTY = 0;
+  viewerApplyTransform();
+}
+
+function viewerApplyTransform() {
+  document.getElementById('img-viewer-img').style.transform =
+    `translate(${viewerTX}px, ${viewerTY}px) scale(${viewerScale})`;
+  document.getElementById('viewer-stage').classList.toggle('zoomed', viewerScale > 1);
+}
+
+// Keep the image from being panned fully off-screen. At 1x this forces tx/ty to 0.
+function viewerClampPan() {
+  const img = document.getElementById('img-viewer-img');
+  const stage = document.getElementById('viewer-stage');
+  const maxX = Math.max(0, (img.offsetWidth * viewerScale - stage.clientWidth) / 2);
+  const maxY = Math.max(0, (img.offsetHeight * viewerScale - stage.clientHeight) / 2);
+  viewerTX = Math.min(maxX, Math.max(-maxX, viewerTX));
+  viewerTY = Math.min(maxY, Math.max(-maxY, viewerTY));
+}
+
+// Zoom to newScale keeping the image point under (px,py) stationary.
+// px/py are in screen px relative to the stage center (same space as tx/ty).
+function viewerZoomAt(newScale, px, py) {
+  newScale = Math.min(VIEWER_MAX_SCALE, Math.max(VIEWER_MIN_SCALE, newScale));
+  viewerTX = px - (px - viewerTX) * (newScale / viewerScale);
+  viewerTY = py - (py - viewerTY) * (newScale / viewerScale);
+  viewerScale = newScale;
+  if (viewerScale === 1) { viewerTX = 0; viewerTY = 0; }
+  viewerClampPan();
+  viewerApplyTransform();
+}
+
+function viewerToggleZoom(px, py) {
+  if (viewerScale > 1) viewerResetZoom();
+  else viewerZoomAt(VIEWER_TAP_SCALE, px || 0, py || 0);
+}
+
+function initViewerGestures() {
+  const stage = document.getElementById('viewer-stage');
+  const pointers = new Map();          // pointerId -> {x, y, sx, sy}
+  let pinchStartDist = 0, pinchStartScale = 1;
+  let panStart = null;                 // {x, y, tx, ty}
+  let swipeStart = null;               // {x, y}
+  let moved = false;                   // pointer travelled past tap threshold since last pointerdown
+  let lastTap = { t: 0, x: 0, y: 0 };  // manual double-tap detection (touch)
+  let lastPointerType = 'mouse';
+  let downTarget = null;               // real pointerdown target — setPointerCapture retargets the derived click to the stage
+
+  const stagePoint = (e) => {
+    const r = stage.getBoundingClientRect();
+    return { x: e.clientX - r.left - r.width / 2, y: e.clientY - r.top - r.height / 2 };
+  };
+
+  stage.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const p = stagePoint(e);
+    viewerZoomAt(viewerScale * Math.exp(-e.deltaY * 0.0022), p.x, p.y);
+  }, { passive: false });
+
+  stage.addEventListener('pointerdown', (e) => {
+    downTarget = e.target; // capture BEFORE setPointerCapture retargets events
+    try { stage.setPointerCapture(e.pointerId); } catch (_) {} // throws if the pointer is already gone
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
+    lastPointerType = e.pointerType;
+    moved = false;
+    stage.classList.add('dragging');
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinchStartDist = Math.hypot(a.x - b.x, a.y - b.y);
+      pinchStartScale = viewerScale;
+      panStart = null; swipeStart = null;
+    } else if (pointers.size === 1) {
+      if (viewerScale > 1) panStart = { x: e.clientX, y: e.clientY, tx: viewerTX, ty: viewerTY };
+      else if (e.pointerType === 'touch') swipeStart = { x: e.clientX, y: e.clientY };
+    }
+  });
+
+  stage.addEventListener('pointermove', (e) => {
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+    p.x = e.clientX; p.y = e.clientY;
+    if (Math.abs(p.x - p.sx) > 6 || Math.abs(p.y - p.sy) > 6) moved = true;
+
+    if (pointers.size === 2 && pinchStartDist) {
+      const [a, b] = [...pointers.values()];
+      const r = stage.getBoundingClientRect();
+      viewerZoomAt(
+        pinchStartScale * (Math.hypot(a.x - b.x, a.y - b.y) / pinchStartDist),
+        (a.x + b.x) / 2 - r.left - r.width / 2,
+        (a.y + b.y) / 2 - r.top - r.height / 2
+      );
+    } else if (pointers.size === 1 && panStart) {
+      viewerTX = panStart.tx + (e.clientX - panStart.x);
+      viewerTY = panStart.ty + (e.clientY - panStart.y);
+      viewerClampPan();
+      viewerApplyTransform();
+    }
+  });
+
+  const endPointer = (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.delete(e.pointerId);
+    if (pointers.size === 0) stage.classList.remove('dragging');
+
+    if (pointers.size === 1) {
+      // Pinch ended with one finger still down — rebase that finger as a pan.
+      const rem = [...pointers.values()][0];
+      pinchStartDist = 0;
+      panStart = viewerScale > 1 ? { x: rem.x, y: rem.y, tx: viewerTX, ty: viewerTY } : null;
+      swipeStart = null;
+      return;
+    }
+    if (pointers.size > 0) return;
+
+    pinchStartDist = 0; panStart = null;
+
+    // Double-tap (touch) toggles zoom; dblclick handles mouse separately.
+    if (e.pointerType === 'touch' && !moved) {
+      const now = Date.now();
+      if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) {
+        lastTap.t = 0;
+        const pt = stagePoint(e);
+        viewerToggleZoom(pt.x, pt.y);
+        swipeStart = null;
+        return;
+      }
+      lastTap = { t: now, x: e.clientX, y: e.clientY };
+    }
+
+    // Single-finger horizontal swipe navigates — only when not zoomed.
+    if (swipeStart && viewerScale === 1) {
+      const dx = e.clientX - swipeStart.x, dy = e.clientY - swipeStart.y;
+      if (Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.4) viewerNav(dx < 0 ? 1 : -1);
+    }
+    swipeStart = null;
+  };
+  stage.addEventListener('pointerup', endPointer);
+  stage.addEventListener('pointercancel', endPointer);
+
+  stage.addEventListener('dblclick', (e) => {
+    if (lastPointerType === 'touch') return; // touch double-tap already handled in pointerup
+    const p = stagePoint(e);
+    viewerToggleZoom(p.x, p.y);
+  });
+
+  // Backdrop click closes — only when unzoomed, only on the true backdrop
+  // (not the image, and not after a drag/swipe). The × button always closes.
+  stage.addEventListener('click', () => {
+    if (moved || viewerScale !== 1 || downTarget !== stage) return;
+    closeImgViewer();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (!document.getElementById('img-viewer').classList.contains('show')) return;
+    if (e.key === 'Escape') closeImgViewer();
+    else if (e.key === 'ArrowLeft') viewerNav(-1);
+    else if (e.key === 'ArrowRight') viewerNav(1);
+  });
+}
+initViewerGestures(); // script sits at the end of <body>, viewer DOM already exists
 
 function esc(s){ if(!s)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 </script>
