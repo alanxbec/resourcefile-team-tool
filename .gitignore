@@ -1,0 +1,5 @@
+# Local Netlify folder
+.netlify
+
+# Local build staging for netlify deploy --dir=
+deploy_preview/

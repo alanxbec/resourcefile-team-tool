@@ -38,9 +38,29 @@ Before saving, the app checks for similar existing entries so the library stays 
 
 <img src="screenshots/duplicate-detection.png" alt="Duplicate detection prompt" width="280">
 
+**Staging tray for multi-page flyers**
+
+Scanning no longer commits instantly. Staff can add every page of a multi-page flyer, remove a mis-scan, and review before anything is saved to the shared library.
+
+<img src="screenshots/staging-tray.png" alt="Staging tray showing three staged flyer pages before save" width="280">
+
+**Multi-page library cards**
+
+Resources with more than one page show a page-count badge right on the card.
+
+<img src="screenshots/multi-page-card.png" alt="Library card with a multi-page badge" width="280">
+
+**Zoom viewer**
+
+Tap into any flyer image to pinch, scroll-wheel, or double-tap zoom and pan for fine print, with swipe navigation between pages.
+
+<img src="screenshots/zoom-viewer.png" alt="Zoomed-in flyer page with page navigation" width="280">
+
 ## Key Features
 
 - **Scan-to-save**: Point a phone camera at any flyer and AI handles the data entry
+- **Multi-page flyers**: A staging tray lets staff add every page of a flyer, drop a mis-scan, and review before anything is saved; the edit screen supports the same add/remove/reorder controls after the fact
+- **Zoom viewer**: Pinch, scroll-wheel, or double-tap to zoom into any flyer page for fine print, with swipe/arrow navigation across pages
 - **Smart organization**: Resources are sorted into categories (housing, food, mental health, employment, legal, and more) with a searchable, collapsible library view
 - **Duplicate detection**: Before saving, the app checks for similar existing entries and lets staff confirm, merge, or skip, so the library doesn't get cluttered
 - **Smart expiration handling**: One-time events, recurring programs, and open-ended resources are each treated differently, so time-sensitive flyers age out automatically while ongoing programs stay listed
@@ -61,4 +81,4 @@ The app was built as a single, self-contained file so it could be deployed and m
 
 ## Status
 
-Actively used by the team and expanding to a second team within the organization. Authentication and access controls are in place and locked down. Recent work added multilingual flyer support, so the app detects a flyer's language and keeps saved entries readable in that language, and closed a storage cleanup gap so images from deleted resources or discarded duplicate scans no longer pile up over time.
+Actively used by the team and expanding to a second team within the organization. Authentication and access controls are in place and locked down. Recent work added multi-page flyer support (staging tray, page-count badges, add/remove/reorder on the edit screen), a pinch/scroll/double-tap zoom viewer, multilingual flyer support so the app detects a flyer's language and keeps saved entries readable in that language, and closed a storage cleanup gap so images from deleted resources or discarded duplicate scans no longer pile up over time.
