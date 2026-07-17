@@ -50,12 +50,6 @@ Resources with more than one page show a page-count badge right on the card.
 
 <img src="screenshots/multi-page-card.png" alt="Library card with a multi-page badge" width="280">
 
-**Zoom viewer**
-
-Tap into any flyer image to pinch, scroll-wheel, or double-tap zoom and pan for fine print, with swipe navigation between pages.
-
-<img src="screenshots/zoom-viewer.png" alt="Zoomed-in flyer page with page navigation" width="280">
-
 ## Key Features
 
 - **Scan-to-save**: Point a phone camera at any flyer and AI handles the data entry
