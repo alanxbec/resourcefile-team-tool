@@ -159,10 +159,12 @@
     .lib-title { font-family:var(--serif); font-size:28px; color:var(--ink); font-weight:600; font-style:italic; letter-spacing:-.01em; }
     .btn-dark { background:var(--ink); color:var(--sage-l); border:none; padding:9px 16px; border-radius:var(--radius-sm); font-family:var(--sans); font-size:12.5px; cursor:pointer; font-weight:700; letter-spacing:.02em; transition:background .18s; }
     .btn-dark:hover { background:var(--ink2); }
-    .filter-row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
-    .chip { background:var(--surface); border:1px solid var(--border-strong); color:var(--text-2); padding:6px 14px; border-radius:999px; font-size:12px; cursor:pointer; font-family:var(--sans); white-space:nowrap; transition:all .18s; font-weight:600; }
-    .chip:hover { border-color:#9aa3b2; }
-    .chip.active { background:var(--ink); color:#fff; border-color:var(--ink); }
+    .lib-recent { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 16px; margin-bottom:20px; }
+    .lib-recent-title { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:700; margin-bottom:6px; }
+    .lib-recent-list { margin:0; padding:0; list-style:disc inside; }
+    .lib-recent-list li { font-size:13.5px; color:var(--text-2); line-height:1.7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+    .lib-recent-list li:hover { color:var(--ink); }
+    .lib-recent-list li::marker { color:var(--muted); }
     .empty-state { text-align:center; padding:64px 0 72px; }
     .empty-icon { width:76px; height:76px; margin:0 auto 16px; background:var(--sage-xl); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:34px; }
     .empty-title { font-size:20px; font-weight:600; margin-bottom:6px; font-family:var(--serif); font-style:italic; color:var(--ink); }
@@ -271,6 +273,7 @@
     /* ── ACCESS MODE (staff vs youth) ── */
     body.youth-mode .staff-only { display:none !important; }
     body:not(.youth-mode) .youth-only { display:none !important; }
+    body.on-login header nav { display:none; }
 
     /* ── DUPLICATE MODAL ── */
     #dup-modal { display:none; position:fixed; inset:0; background:rgba(15,17,23,.72); backdrop-filter:blur(4px); z-index:var(--z-modal); align-items:center; justify-content:center; padding:20px; }
@@ -352,7 +355,7 @@
     }
   </style>
 </head>
-<body>
+<body class="on-login">
 <div id="loading">
   <div class="loading-spinner"></div>
   <div class="loading-text">Connecting to team library...</div>
@@ -469,7 +472,10 @@
         <input class="search-input" type="text" id="search-input" placeholder="Search resources…" oninput="onSearch()" />
         <button class="search-clear" id="search-clear" onclick="clearSearch()">×</button>
       </div>
-      <div class="filter-row" id="filter-row"></div>
+      <div class="lib-recent" id="lib-recent" style="display:none">
+        <div class="lib-recent-title">Recently added</div>
+        <ul class="lib-recent-list" id="lib-recent-list"></ul>
+      </div>
       <div id="library-empty" class="empty-state" style="display:none">
         <div class="empty-icon">📂</div>
         <div class="empty-title">No resources yet</div>
@@ -479,7 +485,7 @@
       <div id="search-empty" class="empty-state" style="display:none">
         <div class="empty-icon">🔎</div>
         <div class="empty-title">No matches found</div>
-        <div class="empty-text">Try a different search term or category filter.</div>
+        <div class="empty-text">Try a different search term.</div>
       </div>
       <div id="accordion-container"></div>
       <div class="resource-grid" id="resource-grid" style="display:none"></div>
@@ -542,7 +548,6 @@ const SUPABASE_ANON_KEY = 'sb_publishable_zL9huvvXqqnvLQw1KXA6Pg_dnjECCvb'; // �
 
 let sb = null;
 let resources = [];
-let activeFilter = "all";
 let lastSeenAt = null;
 let appMode = 'staff';        // 'staff' = logged in (full power) | 'youth' = read-only
 let currentUserName = 'Team'; // shown as "added by"
@@ -631,6 +636,7 @@ function startPolling() {
   stopPolling();
   pollTimer = setInterval(async () => {
     await loadResources();
+    if (document.getElementById('view-library').classList.contains('active')) renderLibRecent();
     if (appMode === 'staff') checkNotifications();
   }, 30000);
 }
@@ -806,6 +812,7 @@ function closeBanner() {
 // ── NAVIGATION ──
 function showViewRaw(name) {
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.body.classList.toggle('on-login', name==='setup');
   document.getElementById('view-'+name).classList.add('active');
   document.getElementById('btn-nav-scan').classList.toggle('active', name==='scanner');
   document.getElementById('btn-nav-lib').classList.toggle('active', name==='library'||name==='detail');
@@ -1233,7 +1240,7 @@ function renderRecent() {
 // ── LIBRARY ──
 let searchQuery = '';
 
-function renderLibrary() { renderFilters(); renderGrid(); }
+function renderLibrary() { renderLibRecent(); renderGrid(); }
 
 function onSearch() {
   searchQuery = document.getElementById('search-input').value.trim().toLowerCase();
@@ -1248,18 +1255,20 @@ function clearSearch() {
   renderGrid();
 }
 
-function renderFilters() {
-  const row=document.getElementById('filter-row');
-  const counts={};
-  CATEGORIES.forEach(c=>counts[c.id]=resources.filter(r=>r.category===c.id).length);
-  const used=CATEGORIES.filter(c=>counts[c.id]>0);
-  row.innerHTML=`<button class="chip ${activeFilter==='all'?'active':''}" onclick="setFilter('all')">All (${resources.length})</button>`
-    +used.map(c=>`<button class="chip ${activeFilter===c.id?'active':''}"
-      style="${activeFilter===c.id?`background:${c.color};border-color:${c.color}`:''}"
-      onclick="setFilter('${c.id}')">${c.icon} ${c.label} (${counts[c.id]})</button>`).join('');
+// The 5 newest uploads (resources is already sorted newest-first by added_at)
+function renderLibRecent() {
+  const box=document.getElementById('lib-recent');
+  const list=document.getElementById('lib-recent-list');
+  if(resources.length===0){box.style.display='none';return;}
+  box.style.display='';
+  list.innerHTML=resources.slice(0,5).map(r=>{
+    const cat=CAT[r.category]||CAT.other;
+    return `<li data-id="${r.id}">${cat.icon} ${esc(r.name||'Untitled')}</li>`;
+  }).join('');
+  list.querySelectorAll('li[data-id]').forEach(el=>{
+    el.addEventListener('click',()=>openDetail(Number(el.dataset.id)));
+  });
 }
-
-function setFilter(id) { activeFilter=id; renderGrid(); }
 
 // Track which accordion groups are open
 const openGroups = new Set();
@@ -1277,7 +1286,7 @@ function renderGrid() {
   const emptyMain = document.getElementById('library-empty');
   const emptySearch = document.getElementById('search-empty');
 
-  let filtered = activeFilter==='all' ? resources : resources.filter(r=>r.category===activeFilter);
+  let filtered = resources;
 
   // Apply search
   if (searchQuery) {
@@ -1293,8 +1302,8 @@ function renderGrid() {
   emptyMain.style.display = resources.length===0 ? 'block' : 'none';
   emptySearch.style.display = resources.length>0 && filtered.length===0 ? 'block' : 'none';
 
-  // If searching or a specific category filter is active, use flat grid for simplicity
-  if (searchQuery || activeFilter !== 'all') {
+  // If searching, use flat grid for simplicity
+  if (searchQuery) {
     accordion.style.display = 'none';
     flatGrid.style.display = '';
     flatGrid.innerHTML = filtered.map(r => renderCard(r)).join('');
